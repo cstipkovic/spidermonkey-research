@@ -36,6 +36,10 @@ static const int32_t NUNBOX32_TYPE_OFFSET    = 4;
 static const int32_t NUNBOX32_PAYLOAD_OFFSET = 0;
 
 static const uint32_t ShadowStackSpace = 0;
+
+// How far forward/back can a jump go? Provide a generous buffer for thunks.
+static const uint32_t JumpImmediateRange = 25 * 1024 * 1024;
+
 ////
 // These offsets are related to bailouts.
 ////
@@ -270,11 +274,6 @@ class FloatRegisters
         return Names[code];
     }
 
-    static const char* GetName(uint32_t i) {
-        MOZ_ASSERT(i < Total);
-        return GetName(Encoding(i));
-    }
-
     static Code FromName(const char* name);
 
     static const Encoding Invalid = invalid_freg;
@@ -287,8 +286,9 @@ class FloatRegisters
     static uint32_t ActualTotalPhys();
 
     typedef uint64_t SetType;
-    static const SetType AllDoubleMask = ((1ull << 16) - 1) << 32;
-    static const SetType AllMask = ((1ull << 48) - 1);
+    static const SetType AllSingleMask = (1ull << TotalSingle) - 1;
+    static const SetType AllDoubleMask = ((1ull << TotalDouble) - 1) << TotalSingle;
+    static const SetType AllMask = AllDoubleMask | AllSingleMask;
 
     // d15 is the ScratchFloatReg.
     static const SetType NonVolatileDoubleMask =
@@ -391,8 +391,7 @@ class VFPRegister
 
     bool isSingle() const { return kind == Single; }
     bool isDouble() const { return kind == Double; }
-    bool isInt32x4() const { return false; }
-    bool isFloat32x4() const { return false; }
+    bool isSimd128() const { return false; }
     bool isFloat() const { return (kind == Double) || (kind == Single); }
     bool isInt() const { return (kind == UInt) || (kind == Int); }
     bool isSInt() const { return kind == Int; }
@@ -409,8 +408,7 @@ class VFPRegister
 
     VFPRegister asSingle() const { return singleOverlay(); }
     VFPRegister asDouble() const { return doubleOverlay(); }
-    VFPRegister asInt32x4() const { MOZ_CRASH("NYI"); }
-    VFPRegister asFloat32x4() const { MOZ_CRASH("NYI"); }
+    VFPRegister asSimd128() const { MOZ_CRASH("NYI"); }
 
     struct VFPRegIndexSplit;
     VFPRegIndexSplit encode();
@@ -651,11 +649,11 @@ static inline bool UseHardFpABI()
 // have ABIArg which are represented by pair of general purpose registers.
 #define JS_CODEGEN_REGISTER_PAIR 1
 
-// See the comments above AsmJSMappedSize in AsmJSValidate.h for more info.
+// See MIRGenerator::foldableOffsetRange for more info.
 // TODO: Implement this for ARM. Note that it requires Codegen to respect the
 // offset field of AsmJSHeapAccess.
-static const size_t AsmJSCheckedImmediateRange = 0;
-static const size_t AsmJSImmediateRange = 0;
+static const size_t WasmCheckedImmediateRange = 0;
+static const size_t WasmImmediateRange = 0;
 
 } // namespace jit
 } // namespace js

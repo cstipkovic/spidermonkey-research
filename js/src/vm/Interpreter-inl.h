@@ -26,51 +26,6 @@
 
 namespace js {
 
-inline bool
-ComputeThis(JSContext* cx, AbstractFramePtr frame)
-{
-    MOZ_ASSERT_IF(frame.isInterpreterFrame(), !frame.asInterpreterFrame()->runningInJit());
-
-    if (frame.isFunctionFrame() && frame.fun()->isArrow()) {
-        /*
-         * Arrow functions store their (lexical) |this| value in an
-         * extended slot.
-         */
-        frame.thisValue() = frame.fun()->getExtendedSlot(0);
-        return true;
-    }
-
-    if (frame.isModuleFrame()) {
-        MOZ_ASSERT(frame.thisValue().isUndefined());
-        return true;
-    }
-
-    if (frame.thisValue().isObject())
-        return true;
-    RootedValue thisv(cx, frame.thisValue());
-    if (frame.isFunctionFrame()) {
-        if (frame.fun()->strict() || frame.fun()->isSelfHostedBuiltin())
-            return true;
-        /*
-         * Eval function frames have their own |this| slot, which is a copy of the function's
-         * |this| slot. If we lazily wrap a primitive |this| in an eval function frame, the
-         * eval's frame will get the wrapper, but the function's frame will not. To prevent
-         * this, we always wrap a function's |this| before pushing an eval frame, and should
-         * thus never see an unwrapped primitive in a non-strict eval function frame. Null
-         * and undefined |this| values will unwrap to the same object in the function and
-         * eval frames, so are not required to be wrapped.
-         */
-        MOZ_ASSERT_IF(frame.isEvalFrame(), thisv.isUndefined() || thisv.isNull());
-    }
-
-    RootedValue result(cx);
-    if (!BoxNonStrictThis(cx, thisv, &result))
-        return false;
-
-    frame.thisValue() = result;
-    return true;
-}
-
 /*
  * Every possible consumer of MagicValue(JS_OPTIMIZED_ARGUMENTS) (as determined
  * by ScriptAnalysis::needsArgsObj) must check for these magic values and, when
@@ -249,6 +204,10 @@ FetchName(JSContext* cx, HandleObject obj, HandleObject obj2, HandlePropertyName
         }
     }
 
+    // We do our own explicit checking for |this|
+    if (name == cx->names().dotThis)
+        return true;
+
     // NAME operations are the slow paths already, so unconditionally check
     // for uninitialized lets.
     return CheckUninitializedLexical(cx, name, vp);
@@ -319,147 +278,17 @@ SetNameOperation(JSContext* cx, JSScript* script, jsbytecode* pc, HandleObject s
     RootedId id(cx, NameToId(name));
     RootedValue receiver(cx, ObjectValue(*scope));
     if (scope->isUnqualifiedVarObj()) {
-        MOZ_ASSERT(!scope->getOps()->setProperty);
-        ok = NativeSetProperty(cx, scope.as<NativeObject>(), id, val, receiver, Unqualified,
-                               result);
+        RootedNativeObject varobj(cx);
+        if (scope->is<DebugScopeObject>())
+            varobj = &scope->as<DebugScopeObject>().scope().as<NativeObject>();
+        else
+            varobj = &scope->as<NativeObject>();
+        MOZ_ASSERT(!varobj->getOpsSetProperty());
+        ok = NativeSetProperty(cx, varobj, id, val, receiver, Unqualified, result);
     } else {
         ok = SetProperty(cx, scope, id, val, receiver, result);
     }
     return ok && result.checkStrictErrorOrWarning(cx, scope, id, strict);
-}
-
-inline bool
-CheckLexicalNameConflict(JSContext* cx, Handle<ClonedBlockObject*> lexicalScope,
-                         HandleObject varObj, HandlePropertyName name)
-{
-    mozilla::Maybe<frontend::Definition::Kind> redeclKind;
-    RootedId id(cx, NameToId(name));
-    RootedShape shape(cx);
-    if ((shape = lexicalScope->lookup(cx, name))) {
-        redeclKind = mozilla::Some(shape->writable() ? frontend::Definition::LET
-                                                     : frontend::Definition::CONSTANT);
-    } else if (varObj->isNative() && (shape = varObj->as<NativeObject>().lookup(cx, name))) {
-        if (!shape->configurable())
-            redeclKind = mozilla::Some(frontend::Definition::VAR);
-    } else {
-        Rooted<PropertyDescriptor> desc(cx);
-        if (!GetOwnPropertyDescriptor(cx, varObj, id, &desc))
-            return false;
-        if (desc.object() && desc.hasConfigurable() && !desc.configurable())
-            redeclKind = mozilla::Some(frontend::Definition::VAR);
-    }
-
-    if (redeclKind.isSome()) {
-        ReportRuntimeRedeclaration(cx, name, *redeclKind);
-        return false;
-    }
-
-    return true;
-}
-
-inline bool
-CheckVarNameConflict(JSContext* cx, Handle<ClonedBlockObject*> lexicalScope,
-                     HandlePropertyName name)
-{
-    if (Shape* shape = lexicalScope->lookup(cx, name)) {
-        ReportRuntimeRedeclaration(cx, name, shape->writable() ? frontend::Definition::LET
-                                                               : frontend::Definition::CONSTANT);
-        return false;
-    }
-    return true;
-}
-
-inline bool
-CheckVarNameConflict(JSContext* cx, Handle<CallObject*> callObj, HandlePropertyName name)
-{
-    RootedFunction fun(cx, &callObj->callee());
-    RootedScript script(cx, fun->nonLazyScript());
-    uint32_t bodyLevelLexicalsStart = script->bindings.numVars();
-
-    for (BindingIter bi(script); !bi.done(); bi++) {
-        if (name == bi->name() &&
-            bi.isBodyLevelLexical() &&
-            bi.localIndex() >= bodyLevelLexicalsStart)
-        {
-            ReportRuntimeRedeclaration(cx, name,
-                                       bi->kind() == Binding::CONSTANT
-                                       ? frontend::Definition::CONSTANT
-                                       : frontend::Definition::LET);
-            return false;
-        }
-    }
-
-    return true;
-}
-
-inline bool
-CheckGlobalDeclarationConflicts(JSContext* cx, HandleScript script,
-                                Handle<ClonedBlockObject*> lexicalScope,
-                                HandleObject varObj)
-{
-    // Due to the extensibility of the global lexical scope, we must check for
-    // redeclaring a binding.
-    //
-    // In the case of non-syntactic scope chains, we are checking
-    // redeclarations against the non-syntactic lexical scope and the
-    // variables object that the lexical scope corresponds to.
-    RootedPropertyName name(cx);
-    BindingIter bi(script);
-
-    for (uint32_t i = 0; i < script->bindings.numVars(); i++, bi++) {
-        name = bi->name();
-        if (!CheckVarNameConflict(cx, lexicalScope, name))
-            return false;
-    }
-
-    for (uint32_t i = 0; i < script->bindings.numBodyLevelLexicals(); i++, bi++) {
-        name = bi->name();
-        if (!CheckLexicalNameConflict(cx, lexicalScope, varObj, name))
-            return false;
-    }
-
-    return true;
-}
-
-inline bool
-CheckEvalDeclarationConflicts(JSContext* cx, HandleScript script,
-                              HandleObject scopeChain, HandleObject varObj)
-{
-    // We don't need to check body-level lexical bindings for conflict. Eval
-    // scripts always execute under their own lexical scope.
-    if (script->bindings.numVars() == 0)
-        return true;
-
-    RootedPropertyName name(cx);
-    RootedObject obj(cx, scopeChain);
-    Rooted<ClonedBlockObject*> lexicalScope(cx);
-
-    // ES6 18.2.1.2 step d
-    //
-    // Check that a direct eval will not hoist 'var' bindings over lexical
-    // bindings with the same name.
-    while (obj != varObj) {
-        if (obj->is<ClonedBlockObject>()) {
-            lexicalScope = &obj->as<ClonedBlockObject>();
-            for (BindingIter bi(script); !bi.done(); bi++) {
-                name = bi->name();
-                if (!CheckVarNameConflict(cx, lexicalScope, name))
-                    return false;
-            }
-        }
-        obj = obj->enclosingScope();
-    }
-
-    if (varObj->is<CallObject>()) {
-        Rooted<CallObject*> callObj(cx, &varObj->as<CallObject>());
-        for (BindingIter bi(script); !bi.done(); bi++) {
-            name = bi->name();
-            if (!CheckVarNameConflict(cx, callObj, name))
-                return false;
-        }
-    }
-
-    return true;
 }
 
 inline bool
@@ -570,17 +399,13 @@ NegOperation(JSContext* cx, HandleScript script, jsbytecode* pc, HandleValue val
 }
 
 static MOZ_ALWAYS_INLINE bool
-ToIdOperation(JSContext* cx, HandleScript script, jsbytecode* pc, HandleValue objval,
-              HandleValue idval, MutableHandleValue res)
+ToIdOperation(JSContext* cx, HandleScript script, jsbytecode* pc, HandleValue idval,
+              MutableHandleValue res)
 {
     if (idval.isInt32()) {
         res.set(idval);
         return true;
     }
-
-    JSObject* obj = ToObjectFromStack(cx, objval);
-    if (!obj)
-        return false;
 
     RootedId id(cx);
     if (!ToPropertyKey(cx, idval, &id))
@@ -634,17 +459,15 @@ GetObjectElementOperation(JSContext* cx, JSOp op, JS::HandleObject obj, JS::Hand
 }
 
 static MOZ_ALWAYS_INLINE bool
-GetPrimitiveElementOperation(JSContext* cx, JSOp op, JS::HandleValue receiver_,
+GetPrimitiveElementOperation(JSContext* cx, JSOp op, JS::HandleValue receiver,
                              HandleValue key, MutableHandleValue res)
 {
     MOZ_ASSERT(op == JSOP_GETELEM || op == JSOP_CALLELEM);
 
-    // FIXME: We shouldn't be boxing here or exposing the boxed object as
-    //        receiver anywhere below (bug 603201).
-    RootedObject boxed(cx, ToObjectFromStack(cx, receiver_));
+    // FIXME: Bug 1234324 We shouldn't be boxing here.
+    RootedObject boxed(cx, ToObjectFromStack(cx, receiver));
     if (!boxed)
         return false;
-    RootedValue receiver(cx, ObjectValue(*boxed));
 
     do {
         uint32_t index;
@@ -674,7 +497,7 @@ GetPrimitiveElementOperation(JSContext* cx, JSOp op, JS::HandleValue receiver_,
         RootedId id(cx);
         if (!ToPropertyKey(cx, key, &id))
             return false;
-        if (!GetProperty(cx, boxed, boxed, id, res))
+        if (!GetProperty(cx, boxed, receiver, id, res))
             return false;
     } while (false);
 
@@ -750,17 +573,18 @@ TypeOfObjectOperation(JSObject* obj, JSRuntime* rt)
 }
 
 static MOZ_ALWAYS_INLINE bool
-InitElemOperation(JSContext* cx, HandleObject obj, HandleValue idval, HandleValue val)
+InitElemOperation(JSContext* cx, jsbytecode* pc, HandleObject obj, HandleValue idval, HandleValue val)
 {
     MOZ_ASSERT(!val.isMagic(JS_ELEMENTS_HOLE));
-    MOZ_ASSERT(!obj->getClass()->getProperty);
-    MOZ_ASSERT(!obj->getClass()->setProperty);
+    MOZ_ASSERT(!obj->getClass()->getGetProperty());
+    MOZ_ASSERT(!obj->getClass()->getSetProperty());
 
     RootedId id(cx);
     if (!ToPropertyKey(cx, idval, &id))
         return false;
 
-    return DefineProperty(cx, obj, id, val, nullptr, nullptr, JSPROP_ENUMERATE);
+    unsigned flags = JSOp(*pc) == JSOP_INITHIDDENELEM ? 0 : JSPROP_ENUMERATE;
+    return DefineProperty(cx, obj, id, val, nullptr, nullptr, flags);
 }
 
 static MOZ_ALWAYS_INLINE bool
@@ -952,12 +776,12 @@ ReportIfNotFunction(JSContext* cx, HandleValue v, MaybeConstruct construct = NO_
 }
 
 /*
- * FastInvokeGuard is used to optimize calls to JS functions from natives written
- * in C++, for instance Array.map. If the callee is not Ion-compiled, this will
- * just call Invoke. If the callee has a valid IonScript, however, it will enter
- * Ion directly.
+ * FastCallGuard is used to optimize calls to JS functions from natives written
+ * in C++, e.g. Array.prototype.map.  If the callee is not Ion-compiled, this
+ * will just call js::Call.  If the callee has a valid IonScript, however, it
+ * will enter Ion directly.
  */
-class FastInvokeGuard
+class FastCallGuard
 {
     InvokeArgs args_;
     RootedFunction fun_;
@@ -968,7 +792,7 @@ class FastInvokeGuard
     bool useIon_;
 
   public:
-    FastInvokeGuard(JSContext* cx, const Value& fval)
+    FastCallGuard(JSContext* cx, const Value& fval)
       : args_(cx)
       , fun_(cx)
       , script_(cx)
@@ -989,7 +813,10 @@ class FastInvokeGuard
         return args_;
     }
 
-    bool invoke(JSContext* cx) {
+    bool call(JSContext* cx, HandleValue callee, HandleValue thisv, MutableHandleValue rval) {
+        args_.CallArgs::setCallee(callee);
+        args_.CallArgs::setThis(thisv);
+
         if (useIon_ && fun_) {
             if (!script_) {
                 script_ = fun_->getOrCreateScript(cx);
@@ -1007,6 +834,7 @@ class FastInvokeGuard
                     return false;
 
                 MOZ_ASSERT(result == jit::JitExec_Ok);
+                rval.set(args_.CallArgs::rval());
                 return true;
             }
 
@@ -1019,12 +847,16 @@ class FastInvokeGuard
             }
         }
 
-        return Invoke(cx, args_);
+        if (!InternalCallOrConstruct(cx, args_, NO_CONSTRUCT))
+            return false;
+
+        rval.set(args_.CallArgs::rval());
+        return true;
     }
 
   private:
-    FastInvokeGuard(const FastInvokeGuard& other) = delete;
-    const FastInvokeGuard& operator=(const FastInvokeGuard& other) = delete;
+    FastCallGuard(const FastCallGuard& other) = delete;
+    void operator=(const FastCallGuard& other) = delete;
 };
 
 }  /* namespace js */

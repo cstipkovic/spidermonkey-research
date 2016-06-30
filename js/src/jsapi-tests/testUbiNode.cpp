@@ -4,7 +4,9 @@
 
 #include "builtin/TestingFunctions.h"
 #include "js/UbiNode.h"
+#include "js/UbiNodeDominatorTree.h"
 #include "js/UbiNodePostOrder.h"
+#include "js/UbiNodeShortestPaths.h"
 #include "jsapi-tests/tests.h"
 #include "vm/SavedFrame.h"
 
@@ -22,8 +24,15 @@ struct FakeNode
 
     explicit FakeNode(char name) : name(name), edges() { }
 
-    bool addEdgeTo(FakeNode& referent) {
+    bool addEdgeTo(FakeNode& referent, const char16_t* edgeName = nullptr) {
         JS::ubi::Node node(&referent);
+
+        if (edgeName) {
+            auto ownedName = js::DuplicateString(edgeName);
+            MOZ_RELEASE_ASSERT(ownedName);
+            return edges.emplaceBack(ownedName.release(), node);
+        }
+
         return edges.emplaceBack(nullptr, node);
     }
 };
@@ -35,10 +44,14 @@ template<>
 struct Concrete<FakeNode> : public Base
 {
     static const char16_t concreteTypeName[];
-    const char16_t* typeName() const { return concreteTypeName; }
+    const char16_t* typeName() const override { return concreteTypeName; }
 
-    UniquePtr<EdgeRange> edges(JSRuntime* rt, bool wantNames) const {
+    UniquePtr<EdgeRange> edges(JSRuntime* rt, bool wantNames) const override {
         return UniquePtr<EdgeRange>(js_new<PreComputedEdgeRange>(get().edges));
+    }
+
+    Node::Size size(mozilla::MallocSizeOf) const override {
+        return 1;
     }
 
     static void construct(void* storage, FakeNode* ptr) { new (storage) Concrete(ptr); }
@@ -60,8 +73,9 @@ BEGIN_TEST(test_ubiNodeZone)
     CHECK(global1);
     CHECK(JS::ubi::Node(global1).zone() == cx->zone());
 
+    JS::CompartmentOptions globalOptions;
     RootedObject global2(cx, JS_NewGlobalObject(cx, getGlobalClass(), nullptr,
-                                                JS::FireOnNewGlobalHook));
+                                                JS::FireOnNewGlobalHook, globalOptions));
     CHECK(global2);
     CHECK(global1->zone() != global2->zone());
     CHECK(JS::ubi::Node(global2).zone() == global2->zone());
@@ -103,8 +117,9 @@ BEGIN_TEST(test_ubiNodeCompartment)
     CHECK(global1);
     CHECK(JS::ubi::Node(global1).compartment() == cx->compartment());
 
+    JS::CompartmentOptions globalOptions;
     RootedObject global2(cx, JS_NewGlobalObject(cx, getGlobalClass(), nullptr,
-                                                JS::FireOnNewGlobalHook));
+                                                JS::FireOnNewGlobalHook, globalOptions));
     CHECK(global2);
     CHECK(global1->compartment() != global2->compartment());
     CHECK(JS::ubi::Node(global2).compartment() == global2->compartment());
@@ -138,7 +153,7 @@ BEGIN_TEST(test_ubiNodeJSObjectConstructorName)
     EVAL("this.Ctor = function Ctor() {}; new Ctor", &val);
     CHECK(val.isObject());
 
-    mozilla::UniquePtr<char16_t[], JS::FreePolicy> ctorName;
+    UniqueTwoByteChars ctorName;
     CHECK(JS::ubi::Node(&val.toObject()).jsObjectConstructorName(cx, ctorName));
     CHECK(ctorName);
     CHECK(js_strcmp(ctorName.get(), MOZ_UTF16("Ctor")) == 0);
@@ -266,6 +281,35 @@ BEGIN_TEST(test_ubiCoarseType)
 }
 END_TEST(test_ubiCoarseType)
 
+struct ExpectedEdge
+{
+    char from;
+    char to;
+
+    ExpectedEdge(FakeNode& fromNode, FakeNode& toNode)
+        : from(fromNode.name)
+        , to(toNode.name)
+    { }
+};
+
+namespace js {
+
+template <>
+struct DefaultHasher<ExpectedEdge>
+{
+    using Lookup = ExpectedEdge;
+
+    static HashNumber hash(const Lookup& l) {
+        return mozilla::AddToHash(l.from, l.to);
+    }
+
+    static bool match(const ExpectedEdge& k, const Lookup& l) {
+        return k.from == l.from && k.to == l.to;
+    }
+};
+
+} // namespace js
+
 BEGIN_TEST(test_ubiPostOrder)
 {
     // Construct the following graph:
@@ -304,29 +348,56 @@ BEGIN_TEST(test_ubiPostOrder)
     FakeNode f('f');
     FakeNode g('g');
 
-    r.addEdgeTo(a);
-    r.addEdgeTo(e);
-    a.addEdgeTo(b);
-    a.addEdgeTo(c);
-    b.addEdgeTo(d);
-    c.addEdgeTo(a);
-    c.addEdgeTo(d);
-    c.addEdgeTo(f);
-    e.addEdgeTo(f);
-    e.addEdgeTo(g);
-    f.addEdgeTo(g);
+    js::HashSet<ExpectedEdge> expectedEdges(cx);
+    CHECK(expectedEdges.init());
+
+    auto declareEdge = [&](FakeNode& from, FakeNode& to) {
+        return from.addEdgeTo(to) && expectedEdges.putNew(ExpectedEdge(from, to));
+    };
+
+    CHECK(declareEdge(r, a));
+    CHECK(declareEdge(r, e));
+    CHECK(declareEdge(a, b));
+    CHECK(declareEdge(a, c));
+    CHECK(declareEdge(b, d));
+    CHECK(declareEdge(c, a));
+    CHECK(declareEdge(c, d));
+    CHECK(declareEdge(c, f));
+    CHECK(declareEdge(e, f));
+    CHECK(declareEdge(e, g));
+    CHECK(declareEdge(f, g));
 
     js::Vector<char, 8, js::SystemAllocPolicy> visited;
     {
         // Do a PostOrder traversal, starting from r. Accumulate the names of
-        // the nodes we visit in `visited`.
+        // the nodes we visit in `visited`. Remove edges we traverse from
+        // `expectedEdges` as we find them to ensure that we only find each edge
+        // once.
+
         JS::AutoCheckCannotGC nogc(rt);
         JS::ubi::PostOrder traversal(rt, nogc);
         CHECK(traversal.init());
         CHECK(traversal.addStart(&r));
-        CHECK(traversal.traverse([&](const JS::ubi::Node& node) {
+
+        auto onNode = [&](const JS::ubi::Node& node) {
             return visited.append(node.as<FakeNode>()->name);
-        }));
+        };
+
+        auto onEdge = [&](const JS::ubi::Node& origin, const JS::ubi::Edge& edge) {
+            ExpectedEdge e(*origin.as<FakeNode>(), *edge.referent.as<FakeNode>());
+            if (!expectedEdges.has(e)) {
+                fprintf(stderr,
+                        "Error: Unexpected edge from %c to %c!\n",
+                        origin.as<FakeNode>()->name,
+                        edge.referent.as<FakeNode>()->name);
+                return false;
+            }
+
+            expectedEdges.remove(e);
+            return true;
+        };
+
+        CHECK(traversal.traverse(onNode, onEdge));
     }
 
     fprintf(stderr, "visited.length() = %lu\n", (unsigned long) visited.length());
@@ -343,9 +414,216 @@ BEGIN_TEST(test_ubiPostOrder)
     CHECK(visited[6] == 'a');
     CHECK(visited[7] == 'r');
 
+    // We found all the edges we expected.
+    CHECK(expectedEdges.count() == 0);
+
     return true;
 }
 END_TEST(test_ubiPostOrder)
+
+BEGIN_TEST(test_JS_ubi_DominatorTree)
+{
+    // Construct the following graph:
+    //
+    //                                  .-----.
+    //                                  |     <--------------------------------.
+    //          .--------+--------------|  r  |--------------.                 |
+    //          |        |              |     |              |                 |
+    //          |        |              '-----'              |                 |
+    //          |     .--V--.                             .--V--.              |
+    //          |     |     |                             |     |              |
+    //          |     |  b  |                             |  c  |--------.     |
+    //          |     |     |                             |     |        |     |
+    //          |     '-----'                             '-----'        |     |
+    //       .--V--.     |                                   |        .--V--.  |
+    //       |     |     |                                   |        |     |  |
+    //       |  a  <-----+                                   |   .----|  g  |  |
+    //       |     |     |                              .----'   |    |     |  |
+    //       '-----'     |                              |        |    '-----'  |
+    //          |        |                              |        |       |     |
+    //       .--V--.     |    .-----.                .--V--.     |       |     |
+    //       |     |     |    |     |                |     |     |       |     |
+    //       |  d  <-----+---->  e  <----.           |  f  |     |       |     |
+    //       |     |          |     |    |           |     |     |       |     |
+    //       '-----'          '-----'    |           '-----'     |       |     |
+    //          |     .-----.    |       |              |        |    .--V--.  |
+    //          |     |     |    |       |              |      .-'    |     |  |
+    //          '----->  l  |    |       |              |      |      |  j  |  |
+    //                |     |    '--.    |              |      |      |     |  |
+    //                '-----'       |    |              |      |      '-----'  |
+    //                   |       .--V--. |              |   .--V--.      |     |
+    //                   |       |     | |              |   |     |      |     |
+    //                   '------->  h  |-'              '--->  i  <------'     |
+    //                           |     |          .--------->     |            |
+    //                           '-----'          |         '-----'            |
+    //                              |          .-----.         |               |
+    //                              |          |     |         |               |
+    //                              '---------->  k  <---------'               |
+    //                                         |     |                         |
+    //                                         '-----'                         |
+    //                                            |                            |
+    //                                            '----------------------------'
+    //
+    // This graph has the following dominator tree:
+    //
+    //     r
+    //     |-- a
+    //     |-- b
+    //     |-- c
+    //     |   |-- f
+    //     |   `-- g
+    //     |       `-- j
+    //     |-- d
+    //     |   `-- l
+    //     |-- e
+    //     |-- i
+    //     |-- k
+    //     `-- h
+    //
+    // This graph and dominator tree are taken from figures 1 and 2 of "A Fast
+    // Algorithm for Finding Dominators in a Flowgraph" by Lengauer et al:
+    // http://www.cs.princeton.edu/courses/archive/spr03/cs423/download/dominators.pdf.
+
+    FakeNode r('r');
+    FakeNode a('a');
+    FakeNode b('b');
+    FakeNode c('c');
+    FakeNode d('d');
+    FakeNode e('e');
+    FakeNode f('f');
+    FakeNode g('g');
+    FakeNode h('h');
+    FakeNode i('i');
+    FakeNode j('j');
+    FakeNode k('k');
+    FakeNode l('l');
+
+    CHECK(r.addEdgeTo(a));
+    CHECK(r.addEdgeTo(b));
+    CHECK(r.addEdgeTo(c));
+    CHECK(a.addEdgeTo(d));
+    CHECK(b.addEdgeTo(a));
+    CHECK(b.addEdgeTo(d));
+    CHECK(b.addEdgeTo(e));
+    CHECK(c.addEdgeTo(f));
+    CHECK(c.addEdgeTo(g));
+    CHECK(d.addEdgeTo(l));
+    CHECK(e.addEdgeTo(h));
+    CHECK(f.addEdgeTo(i));
+    CHECK(g.addEdgeTo(i));
+    CHECK(g.addEdgeTo(j));
+    CHECK(h.addEdgeTo(e));
+    CHECK(h.addEdgeTo(k));
+    CHECK(i.addEdgeTo(k));
+    CHECK(j.addEdgeTo(i));
+    CHECK(k.addEdgeTo(r));
+    CHECK(k.addEdgeTo(i));
+    CHECK(l.addEdgeTo(h));
+
+    mozilla::Maybe<JS::ubi::DominatorTree> maybeTree;
+    {
+        JS::AutoCheckCannotGC noGC(rt);
+        maybeTree = JS::ubi::DominatorTree::Create(rt, noGC, &r);
+    }
+
+    CHECK(maybeTree.isSome());
+    auto& tree = *maybeTree;
+
+    // We return the null JS::ubi::Node for nodes that were not reachable in the
+    // graph when computing the dominator tree.
+    FakeNode m('m');
+    CHECK(tree.getImmediateDominator(&m) == JS::ubi::Node());
+    CHECK(tree.getDominatedSet(&m).isNothing());
+
+    struct {
+        FakeNode& dominated;
+        FakeNode& dominator;
+    } domination[] = {
+        {r, r},
+        {a, r},
+        {b, r},
+        {c, r},
+        {d, r},
+        {e, r},
+        {f, c},
+        {g, c},
+        {h, r},
+        {i, r},
+        {j, g},
+        {k, r},
+        {l, d}
+    };
+
+    for (auto& relation : domination) {
+        // Test immediate dominator.
+        fprintf(stderr,
+                "%c's immediate dominator is %c\n",
+                relation.dominated.name,
+                tree.getImmediateDominator(&relation.dominator).as<FakeNode>()->name);
+        CHECK(tree.getImmediateDominator(&relation.dominated) == JS::ubi::Node(&relation.dominator));
+
+        // Test the dominated set. Build up the expected dominated set based on
+        // the set of nodes immediately dominated by this one in `domination`,
+        // then iterate over the actual dominated set and check against the
+        // expected set.
+
+        auto& node = relation.dominated;
+        fprintf(stderr, "Checking %c's dominated set:\n", node.name);
+
+        js::HashSet<char> expectedDominatedSet(cx);
+        CHECK(expectedDominatedSet.init());
+        for (auto& rel : domination) {
+            if (&rel.dominator == &node) {
+                fprintf(stderr, "    Expecting %c\n", rel.dominated.name);
+                CHECK(expectedDominatedSet.putNew(rel.dominated.name));
+            }
+        }
+
+        auto maybeActualDominatedSet = tree.getDominatedSet(&node);
+        CHECK(maybeActualDominatedSet.isSome());
+        auto& actualDominatedSet = *maybeActualDominatedSet;
+
+        for (const auto& dominated : actualDominatedSet) {
+            fprintf(stderr, "    Found %c\n", dominated.as<FakeNode>()->name);
+            CHECK(expectedDominatedSet.has(dominated.as<FakeNode>()->name));
+            expectedDominatedSet.remove(dominated.as<FakeNode>()->name);
+        }
+
+        // Ensure we found them all and aren't still expecting nodes we never
+        // got.
+        CHECK(expectedDominatedSet.count() == 0);
+
+        fprintf(stderr, "Done checking %c's dominated set.\n\n", node.name);
+    }
+
+    struct {
+        FakeNode& node;
+        JS::ubi::Node::Size retainedSize;
+    } sizes[] = {
+        {r, 13},
+        {a, 1},
+        {b, 1},
+        {c, 4},
+        {d, 2},
+        {e, 1},
+        {f, 1},
+        {g, 2},
+        {h, 1},
+        {i, 1},
+        {j, 1},
+        {k, 1},
+        {l, 1},
+    };
+
+    for (auto& expected : sizes) {
+        JS::ubi::Node::Size actual = 0;
+        CHECK(tree.getRetainedSize(&expected.node, nullptr, actual));
+        CHECK(actual == expected.retainedSize);
+    }
+
+    return true;
+}
+END_TEST(test_JS_ubi_DominatorTree)
 
 BEGIN_TEST(test_JS_ubi_Node_scriptFilename)
 {
@@ -380,3 +658,351 @@ BEGIN_TEST(test_JS_ubi_Node_scriptFilename)
     return true;
 }
 END_TEST(test_JS_ubi_Node_scriptFilename)
+
+#define LAMBDA_CHECK(cond)                                                         \
+    do {                                                                           \
+        if (!(cond)) {                                                             \
+            fprintf(stderr,"%s:%d:CHECK failed: " #cond "\n", __FILE__, __LINE__); \
+            return false;                                                          \
+        }                                                                          \
+    } while (false)
+
+static void
+dumpPath(JS::ubi::Path& path)
+{
+    for (size_t i = 0; i < path.length(); i++) {
+        fprintf(stderr, "path[%llu]->predecessor() = '%c'\n",
+                (long long unsigned) i,
+                path[i]->predecessor().as<FakeNode>()->name);
+    }
+}
+
+BEGIN_TEST(test_JS_ubi_ShortestPaths_no_path)
+{
+    // Create the following graph:
+    //
+    //     .---.      .---.    .---.
+    //     | a | <--> | c |    | b |
+    //     '---'      '---'    '---'
+    FakeNode a('a');
+    FakeNode b('b');
+    FakeNode c('c');
+    CHECK(a.addEdgeTo(c));
+    CHECK(c.addEdgeTo(a));
+
+    mozilla::Maybe<JS::ubi::ShortestPaths> maybeShortestPaths;
+    {
+        JS::AutoCheckCannotGC noGC(rt);
+
+        JS::ubi::NodeSet targets;
+        CHECK(targets.init());
+        CHECK(targets.put(&b));
+
+        maybeShortestPaths = JS::ubi::ShortestPaths::Create(rt, noGC, 10, &a,
+                                                            mozilla::Move(targets));
+    }
+
+    CHECK(maybeShortestPaths);
+    auto& paths = *maybeShortestPaths;
+
+    size_t numPathsFound = 0;
+    bool ok = paths.forEachPath(&b, [&](JS::ubi::Path& path) {
+        numPathsFound++;
+        dumpPath(path);
+        return true;
+    });
+    CHECK(ok);
+    CHECK(numPathsFound == 0);
+
+    return true;
+}
+END_TEST(test_JS_ubi_ShortestPaths_no_path)
+
+BEGIN_TEST(test_JS_ubi_ShortestPaths_one_path)
+{
+    // Create the following graph:
+    //
+    //     .---.      .---.     .---.
+    //     | a | <--> | c | --> | b |
+    //     '---'      '---'     '---'
+    FakeNode a('a');
+    FakeNode b('b');
+    FakeNode c('c');
+    CHECK(a.addEdgeTo(c));
+    CHECK(c.addEdgeTo(a));
+    CHECK(c.addEdgeTo(b));
+
+    mozilla::Maybe<JS::ubi::ShortestPaths> maybeShortestPaths;
+    {
+        JS::AutoCheckCannotGC noGC(rt);
+
+        JS::ubi::NodeSet targets;
+        CHECK(targets.init());
+        CHECK(targets.put(&b));
+
+        maybeShortestPaths = JS::ubi::ShortestPaths::Create(rt, noGC, 10, &a,
+                                                            mozilla::Move(targets));
+    }
+
+    CHECK(maybeShortestPaths);
+    auto& paths = *maybeShortestPaths;
+
+    size_t numPathsFound = 0;
+    bool ok = paths.forEachPath(&b, [&](JS::ubi::Path& path) {
+        numPathsFound++;
+
+        dumpPath(path);
+        LAMBDA_CHECK(path.length() == 2);
+        LAMBDA_CHECK(path[0]->predecessor() == JS::ubi::Node(&a));
+        LAMBDA_CHECK(path[1]->predecessor() == JS::ubi::Node(&c));
+
+        return true;
+    });
+
+    CHECK(ok);
+    CHECK(numPathsFound == 1);
+
+    return true;
+}
+END_TEST(test_JS_ubi_ShortestPaths_one_path)
+
+BEGIN_TEST(test_JS_ubi_ShortestPaths_multiple_paths)
+{
+    // Create the following graph:
+    //
+    //                .---.
+    //          .-----| a |-----.
+    //          |     '---'     |
+    //          V       |       V
+    //        .---.     |     .---.
+    //        | b |     |     | d |
+    //        '---'     |     '---'
+    //          |       |       |
+    //          V       |       V
+    //        .---.     |     .---.
+    //        | c |     |     | e |
+    //        '---'     V     '---'
+    //          |     .---.     |
+    //          '---->| f |<----'
+    //                '---'
+    FakeNode a('a');
+    FakeNode b('b');
+    FakeNode c('c');
+    FakeNode d('d');
+    FakeNode e('e');
+    FakeNode f('f');
+    CHECK(a.addEdgeTo(b));
+    CHECK(a.addEdgeTo(f));
+    CHECK(a.addEdgeTo(d));
+    CHECK(b.addEdgeTo(c));
+    CHECK(c.addEdgeTo(f));
+    CHECK(d.addEdgeTo(e));
+    CHECK(e.addEdgeTo(f));
+
+    mozilla::Maybe<JS::ubi::ShortestPaths> maybeShortestPaths;
+    {
+        JS::AutoCheckCannotGC noGC(rt);
+
+        JS::ubi::NodeSet targets;
+        CHECK(targets.init());
+        CHECK(targets.put(&f));
+
+        maybeShortestPaths = JS::ubi::ShortestPaths::Create(rt, noGC, 10, &a,
+                                                            mozilla::Move(targets));
+    }
+
+    CHECK(maybeShortestPaths);
+    auto& paths = *maybeShortestPaths;
+
+    size_t numPathsFound = 0;
+    bool ok = paths.forEachPath(&f, [&](JS::ubi::Path& path) {
+        numPathsFound++;
+        dumpPath(path);
+
+        switch (path.back()->predecessor().as<FakeNode>()->name) {
+            case 'a': {
+                LAMBDA_CHECK(path.length() == 1);
+                break;
+            }
+
+            case 'c': {
+                LAMBDA_CHECK(path.length() == 3);
+                LAMBDA_CHECK(path[0]->predecessor() == JS::ubi::Node(&a));
+                LAMBDA_CHECK(path[1]->predecessor() == JS::ubi::Node(&b));
+                LAMBDA_CHECK(path[2]->predecessor() == JS::ubi::Node(&c));
+                break;
+            }
+
+            case 'e': {
+                LAMBDA_CHECK(path.length() == 3);
+                LAMBDA_CHECK(path[0]->predecessor() == JS::ubi::Node(&a));
+                LAMBDA_CHECK(path[1]->predecessor() == JS::ubi::Node(&d));
+                LAMBDA_CHECK(path[2]->predecessor() == JS::ubi::Node(&e));
+                break;
+            }
+
+            default: {
+                // Unexpected path!
+                LAMBDA_CHECK(false);
+            }
+        }
+
+        return true;
+    });
+
+    CHECK(ok);
+    fprintf(stderr, "numPathsFound = %llu\n", (long long unsigned) numPathsFound);
+    CHECK(numPathsFound == 3);
+
+    return true;
+}
+END_TEST(test_JS_ubi_ShortestPaths_multiple_paths)
+
+BEGIN_TEST(test_JS_ubi_ShortestPaths_more_paths_than_max)
+{
+    // Create the following graph:
+    //
+    //                .---.
+    //          .-----| a |-----.
+    //          |     '---'     |
+    //          V       |       V
+    //        .---.     |     .---.
+    //        | b |     |     | d |
+    //        '---'     |     '---'
+    //          |       |       |
+    //          V       |       V
+    //        .---.     |     .---.
+    //        | c |     |     | e |
+    //        '---'     V     '---'
+    //          |     .---.     |
+    //          '---->| f |<----'
+    //                '---'
+    FakeNode a('a');
+    FakeNode b('b');
+    FakeNode c('c');
+    FakeNode d('d');
+    FakeNode e('e');
+    FakeNode f('f');
+    CHECK(a.addEdgeTo(b));
+    CHECK(a.addEdgeTo(f));
+    CHECK(a.addEdgeTo(d));
+    CHECK(b.addEdgeTo(c));
+    CHECK(c.addEdgeTo(f));
+    CHECK(d.addEdgeTo(e));
+    CHECK(e.addEdgeTo(f));
+
+    mozilla::Maybe<JS::ubi::ShortestPaths> maybeShortestPaths;
+    {
+        JS::AutoCheckCannotGC noGC(rt);
+
+        JS::ubi::NodeSet targets;
+        CHECK(targets.init());
+        CHECK(targets.put(&f));
+
+        maybeShortestPaths = JS::ubi::ShortestPaths::Create(rt, noGC, 1, &a,
+                                                            mozilla::Move(targets));
+    }
+
+    CHECK(maybeShortestPaths);
+    auto& paths = *maybeShortestPaths;
+
+    size_t numPathsFound = 0;
+    bool ok = paths.forEachPath(&f, [&](JS::ubi::Path& path) {
+        numPathsFound++;
+        dumpPath(path);
+        return true;
+    });
+
+    CHECK(ok);
+    fprintf(stderr, "numPathsFound = %llu\n", (long long unsigned) numPathsFound);
+    CHECK(numPathsFound == 1);
+
+    return true;
+}
+END_TEST(test_JS_ubi_ShortestPaths_more_paths_than_max)
+
+BEGIN_TEST(test_JS_ubi_ShortestPaths_multiple_edges_to_target)
+{
+    // Create the following graph:
+    //
+    //                .---.
+    //          .-----| a |-----.
+    //          |     '---'     |
+    //          |       |       |
+    //          |x      |y      |z
+    //          |       |       |
+    //          |       V       |
+    //          |     .---.     |
+    //          '---->| b |<----'
+    //                '---'
+    FakeNode a('a');
+    FakeNode b('b');
+    CHECK(a.addEdgeTo(b, MOZ_UTF16("x")));
+    CHECK(a.addEdgeTo(b, MOZ_UTF16("y")));
+    CHECK(a.addEdgeTo(b, MOZ_UTF16("z")));
+
+    mozilla::Maybe<JS::ubi::ShortestPaths> maybeShortestPaths;
+    {
+        JS::AutoCheckCannotGC noGC(rt);
+
+        JS::ubi::NodeSet targets;
+        CHECK(targets.init());
+        CHECK(targets.put(&b));
+
+        maybeShortestPaths = JS::ubi::ShortestPaths::Create(rt, noGC, 10, &a,
+                                                            mozilla::Move(targets));
+    }
+
+    CHECK(maybeShortestPaths);
+    auto& paths = *maybeShortestPaths;
+
+    size_t numPathsFound = 0;
+    bool foundX = false;
+    bool foundY = false;
+    bool foundZ = false;
+
+    bool ok = paths.forEachPath(&b, [&](JS::ubi::Path& path) {
+        numPathsFound++;
+        dumpPath(path);
+
+        LAMBDA_CHECK(path.length() == 1);
+        LAMBDA_CHECK(path.back()->name());
+        LAMBDA_CHECK(js_strlen(path.back()->name().get()) == 1);
+
+        auto c = uint8_t(path.back()->name().get()[0]);
+        fprintf(stderr, "Edge name = '%c'\n", c);
+
+        switch (c) {
+            case 'x': {
+                foundX = true;
+                break;
+            }
+            case 'y': {
+                foundY = true;
+                break;
+            }
+            case 'z': {
+                foundZ = true;
+                break;
+            }
+            default: {
+                // Unexpected edge!
+                LAMBDA_CHECK(false);
+            }
+        }
+
+        return true;
+    });
+
+    CHECK(ok);
+    fprintf(stderr, "numPathsFound = %llu\n", (long long unsigned) numPathsFound);
+    CHECK(numPathsFound == 3);
+    CHECK(foundX);
+    CHECK(foundY);
+    CHECK(foundZ);
+
+    return true;
+}
+END_TEST(test_JS_ubi_ShortestPaths_multiple_edges_to_target)
+
+#undef LAMBDA_CHECK

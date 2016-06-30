@@ -10,7 +10,10 @@
 #include "jsapi.h"
 #include "jsatom.h"
 
-#include "js/TraceableVector.h"
+#include "gc/Zone.h"
+
+#include "js/GCVector.h"
+#include "js/Id.h"
 
 #include "vm/NativeObject.h"
 #include "vm/ProxyObject.h"
@@ -26,6 +29,8 @@ class ParseNode;
 
 typedef Rooted<ModuleObject*> RootedModuleObject;
 typedef Handle<ModuleObject*> HandleModuleObject;
+typedef Rooted<ModuleEnvironmentObject*> RootedModuleEnvironmentObject;
+typedef Handle<ModuleEnvironmentObject*> HandleModuleEnvironmentObject;
 
 class ImportEntryObject : public NativeObject
 {
@@ -39,16 +44,19 @@ class ImportEntryObject : public NativeObject
     };
 
     static const Class class_;
-    static JSObject* initClass(JSContext* cx, HandleObject obj);
+    static JSObject* initClass(ExclusiveContext* cx, HandleObject obj);
     static bool isInstance(HandleValue value);
-    static ImportEntryObject* create(JSContext* cx,
+    static ImportEntryObject* create(ExclusiveContext* cx,
                                      HandleAtom moduleRequest,
                                      HandleAtom importName,
                                      HandleAtom localName);
-    JSAtom* moduleRequest();
-    JSAtom* importName();
-    JSAtom* localName();
+    JSAtom* moduleRequest() const;
+    JSAtom* importName() const;
+    JSAtom* localName() const;
 };
+
+typedef Rooted<ImportEntryObject*> RootedImportEntryObject;
+typedef Handle<ImportEntryObject*> HandleImportEntryObject;
 
 class ExportEntryObject : public NativeObject
 {
@@ -63,27 +71,61 @@ class ExportEntryObject : public NativeObject
     };
 
     static const Class class_;
-    static JSObject* initClass(JSContext* cx, HandleObject obj);
+    static JSObject* initClass(ExclusiveContext* cx, HandleObject obj);
     static bool isInstance(HandleValue value);
-    static ExportEntryObject* create(JSContext* cx,
+    static ExportEntryObject* create(ExclusiveContext* cx,
                                      HandleAtom maybeExportName,
                                      HandleAtom maybeModuleRequest,
                                      HandleAtom maybeImportName,
                                      HandleAtom maybeLocalName);
-    JSAtom* exportName();
-    JSAtom* moduleRequest();
-    JSAtom* importName();
-    JSAtom* localName();
+    JSAtom* exportName() const;
+    JSAtom* moduleRequest() const;
+    JSAtom* importName() const;
+    JSAtom* localName() const;
 };
 
-struct IndirectBinding
+typedef Rooted<ExportEntryObject*> RootedExportEntryObject;
+typedef Handle<ExportEntryObject*> HandleExportEntryObject;
+
+class IndirectBindingMap
 {
-    IndirectBinding(Handle<ModuleEnvironmentObject*> environment, HandleId localName);
-    RelocatablePtr<ModuleEnvironmentObject*> environment;
-    RelocatableId localName;
-};
+  public:
+    explicit IndirectBindingMap(Zone* zone);
+    bool init();
 
-typedef HashMap<jsid, IndirectBinding, JsidHasher, SystemAllocPolicy> IndirectBindingMap;
+    void trace(JSTracer* trc);
+
+    bool putNew(JSContext* cx, HandleId name,
+                HandleModuleEnvironmentObject environment, HandleId localName);
+
+    size_t count() const {
+        return map_.count();
+    }
+
+    bool has(jsid name) const {
+        return map_.has(name);
+    }
+
+    bool lookup(jsid name, ModuleEnvironmentObject** envOut, Shape** shapeOut) const;
+
+    template <typename Func>
+    void forEachExportedName(Func func) const {
+        for (auto r = map_.all(); !r.empty(); r.popFront())
+            func(r.front().key());
+    }
+
+  private:
+    struct Binding
+    {
+        Binding(ModuleEnvironmentObject* environment, Shape* shape);
+        HeapPtr<ModuleEnvironmentObject*> environment;
+        HeapPtr<Shape*> shape;
+    };
+
+    typedef HashMap<jsid, Binding, DefaultHasher<jsid>, ZoneAllocPolicy> Map;
+
+    Map map_;
+};
 
 class ModuleNamespaceObject : public ProxyObject
 {
@@ -92,7 +134,7 @@ class ModuleNamespaceObject : public ProxyObject
     static ModuleNamespaceObject* create(JSContext* cx, HandleModuleObject module);
 
     ModuleObject& module();
-    ArrayObject& exports();
+    JSObject& exports();
     IndirectBindingMap& bindings();
 
     bool addBinding(JSContext* cx, HandleAtom exportedName, HandleModuleObject targetModule,
@@ -111,19 +153,20 @@ class ModuleNamespaceObject : public ProxyObject
         JS::Value getEnumerateFunction(HandleObject proxy) const;
 
         bool getOwnPropertyDescriptor(JSContext* cx, HandleObject proxy, HandleId id,
-                                      MutableHandle<JSPropertyDescriptor> desc) const override;
+                                      MutableHandle<PropertyDescriptor> desc) const override;
         bool defineProperty(JSContext* cx, HandleObject proxy, HandleId id,
-                            Handle<JSPropertyDescriptor> desc,
+                            Handle<PropertyDescriptor> desc,
                             ObjectOpResult& result) const override;
         bool ownPropertyKeys(JSContext* cx, HandleObject proxy,
                              AutoIdVector& props) const override;
         bool delete_(JSContext* cx, HandleObject proxy, HandleId id,
                      ObjectOpResult& result) const override;
-        bool enumerate(JSContext* cx, HandleObject proxy, MutableHandleObject objp) const override;
         bool getPrototype(JSContext* cx, HandleObject proxy,
                           MutableHandleObject protop) const override;
         bool setPrototype(JSContext* cx, HandleObject proxy, HandleObject proto,
                           ObjectOpResult& result) const override;
+        bool getPrototypeIfOrdinary(JSContext* cx, HandleObject proxy, bool* isOrdinary,
+                                    MutableHandleObject protop) const override;
         bool setImmutablePrototype(JSContext* cx, HandleObject proxy,
                                    bool* succeeded) const override;
 
@@ -139,6 +182,7 @@ class ModuleNamespaceObject : public ProxyObject
         static const char family;
     };
 
+  public:
     static const ProxyHandler proxyHandler;
 };
 
@@ -150,11 +194,11 @@ struct FunctionDeclaration
     FunctionDeclaration(HandleAtom name, HandleFunction fun);
     void trace(JSTracer* trc);
 
-    RelocatablePtrAtom name;
-    RelocatablePtrFunction fun;
+    HeapPtr<JSAtom*> name;
+    HeapPtr<JSFunction*> fun;
 };
 
-using FunctionDeclarationVector = TraceableVector<FunctionDeclaration>;
+using FunctionDeclarationVector = GCVector<FunctionDeclaration, 0, ZoneAllocPolicy>;
 
 class ModuleObject : public NativeObject
 {
@@ -167,6 +211,7 @@ class ModuleObject : public NativeObject
         EnvironmentSlot,
         NamespaceSlot,
         EvaluatedSlot,
+        HostDefinedSlot,
         RequestedModulesSlot,
         ImportEntriesSlot,
         LocalExportEntriesSlot,
@@ -191,6 +236,9 @@ class ModuleObject : public NativeObject
                               HandleArrayObject localExportEntries,
                               HandleArrayObject indiretExportEntries,
                               HandleArrayObject starExportEntries);
+    static bool FreezeArrayProperties(JSContext* cx, HandleModuleObject self);
+    static void AssertArrayPropertiesFrozen(JSContext* cx, HandleModuleObject self);
+    void fixScopesAfterCompartmentMerge(JSContext* cx);
 
     JSScript* script() const;
     JSObject* enclosingStaticScope() const;
@@ -198,27 +246,43 @@ class ModuleObject : public NativeObject
     ModuleEnvironmentObject* environment() const;
     ModuleNamespaceObject* namespace_();
     bool evaluated() const;
+    Value hostDefinedField() const;
     ArrayObject& requestedModules() const;
     ArrayObject& importEntries() const;
     ArrayObject& localExportEntries() const;
     ArrayObject& indirectExportEntries() const;
     ArrayObject& starExportEntries() const;
     IndirectBindingMap& importBindings();
-    ArrayObject* namespaceExports();
+    JSObject* namespaceExports();
     IndirectBindingMap* namespaceBindings();
 
+    static bool DeclarationInstantiation(JSContext* cx, HandleModuleObject self);
+    static bool Evaluation(JSContext* cx, HandleModuleObject self);
+
+    void setHostDefinedField(JS::Value value);
+
+    // For intrinsic_CreateModuleEnvironment.
     void createEnvironment();
 
+    // For BytecodeEmitter.
     bool noteFunctionDeclaration(ExclusiveContext* cx, HandleAtom name, HandleFunction fun);
+
+    // For intrinsic_InstantiateModuleFunctionDeclarations.
     static bool instantiateFunctionDeclarations(JSContext* cx, HandleModuleObject self);
 
+    // For intrinsic_SetModuleEvaluated.
     void setEvaluated();
+
+    // For intrinsic_EvaluateModule.
     static bool evaluate(JSContext* cx, HandleModuleObject self, MutableHandleValue rval);
 
+    // For intrinsic_NewModuleNamespace.
     static ModuleNamespaceObject* createNamespace(JSContext* cx, HandleModuleObject self,
-                                                  HandleArrayObject exports);
+                                                  HandleObject exports);
 
   private:
+    static const ClassOps classOps_;
+
     static void trace(JSTracer* trc, JSObject* obj);
     static void finalize(js::FreeOp* fop, JSObject* obj);
 
@@ -232,21 +296,32 @@ class ModuleObject : public NativeObject
 class MOZ_STACK_CLASS ModuleBuilder
 {
   public:
-    explicit ModuleBuilder(JSContext* cx);
+    explicit ModuleBuilder(ExclusiveContext* cx, HandleModuleObject module);
 
-    bool buildAndInit(frontend::ParseNode* pn, HandleModuleObject module);
+    bool processImport(frontend::ParseNode* pn);
+    bool processExport(frontend::ParseNode* pn);
+    bool processExportFrom(frontend::ParseNode* pn);
+
+    bool hasExportedName(JSAtom* name) const;
+
+    using ExportEntryVector = GCVector<ExportEntryObject*>;
+    const ExportEntryVector& localExportEntries() const {
+        return localExportEntries_;
+    }
+
+    bool buildTables();
+    bool initModule();
 
   private:
-    using AtomVector = TraceableVector<JSAtom*>;
+    using AtomVector = GCVector<JSAtom*>;
     using RootedAtomVector = JS::Rooted<AtomVector>;
-    using ImportEntryVector = TraceableVector<ImportEntryObject*>;
+    using ImportEntryVector = GCVector<ImportEntryObject*>;
     using RootedImportEntryVector = JS::Rooted<ImportEntryVector>;
-    using ExportEntryVector = TraceableVector<ExportEntryObject*> ;
-    using RootedExportEntryVector = JS::Rooted<ExportEntryVector> ;
+    using RootedExportEntryVector = JS::Rooted<ExportEntryVector>;
 
-    JSContext* cx_;
+    ExclusiveContext* cx_;
+    RootedModuleObject module_;
     RootedAtomVector requestedModules_;
-
     RootedAtomVector importedBoundNames_;
     RootedImportEntryVector importEntries_;
     RootedExportEntryVector exportEntries_;
@@ -254,26 +329,25 @@ class MOZ_STACK_CLASS ModuleBuilder
     RootedExportEntryVector indirectExportEntries_;
     RootedExportEntryVector starExportEntries_;
 
-    bool processImport(frontend::ParseNode* pn);
-    bool processExport(frontend::ParseNode* pn);
-    bool processExportFrom(frontend::ParseNode* pn);
+    ImportEntryObject* importEntryFor(JSAtom* localName) const;
 
-    ImportEntryObject* importEntryFor(JSAtom* localName);
-
-    bool appendLocalExportEntry(HandleAtom exportName, HandleAtom localName);
-    bool appendIndirectExportEntry(HandleAtom exportName, HandleAtom moduleRequest,
-                                   HandleAtom importName);
+    bool appendExportEntry(HandleAtom exportName, HandleAtom localName);
+    bool appendExportFromEntry(HandleAtom exportName, HandleAtom moduleRequest,
+                               HandleAtom importName);
 
     bool maybeAppendRequestedModule(HandleAtom module);
 
     template <typename T>
-    ArrayObject* createArray(const TraceableVector<T>& vector);
+    ArrayObject* createArray(const GCVector<T>& vector);
 };
 
-JSObject* InitModuleClass(JSContext* cx, HandleObject obj);
-JSObject* InitImportEntryClass(JSContext* cx, HandleObject obj);
-JSObject* InitExportEntryClass(JSContext* cx, HandleObject obj);
-
 } // namespace js
+
+template<>
+inline bool
+JSObject::is<js::ModuleNamespaceObject>() const
+{
+    return js::IsDerivedProxyObject(this, &js::ModuleNamespaceObject::proxyHandler);
+}
 
 #endif /* builtin_ModuleObject_h */

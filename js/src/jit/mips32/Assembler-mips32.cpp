@@ -25,15 +25,15 @@ ABIArgGenerator::next(MIRType type)
 {
     Register destReg;
     switch (type) {
-      case MIRType_Int32:
-      case MIRType_Pointer:
+      case MIRType::Int32:
+      case MIRType::Pointer:
         if (GetIntArgReg(usedArgSlots_, &destReg))
             current_ = ABIArg(destReg);
         else
             current_ = ABIArg(usedArgSlots_ * sizeof(intptr_t));
         usedArgSlots_++;
         break;
-      case MIRType_Float32:
+      case MIRType::Float32:
         if (!usedArgSlots_) {
             current_ = ABIArg(f12.asSingle());
             firstArgFloatSize_ = 1;
@@ -48,7 +48,7 @@ ABIArgGenerator::next(MIRType type)
         }
         usedArgSlots_++;
         break;
-      case MIRType_Double:
+      case MIRType::Double:
         if (!usedArgSlots_) {
             current_ = ABIArg(f12);
             usedArgSlots_ = 2;
@@ -73,12 +73,6 @@ ABIArgGenerator::next(MIRType type)
     return current_;
 }
 
-const Register ABIArgGenerator::NonArgReturnReg0 = t0;
-const Register ABIArgGenerator::NonArgReturnReg1 = t1;
-const Register ABIArgGenerator::NonArg_VolatileReg = v0;
-const Register ABIArgGenerator::NonReturn_VolatileReg0 = a0;
-const Register ABIArgGenerator::NonReturn_VolatileReg1 = a1;
-
 uint32_t
 js::jit::RT(FloatRegister r)
 {
@@ -91,6 +85,13 @@ js::jit::RD(FloatRegister r)
 {
     MOZ_ASSERT(r.id() < FloatRegisters::RegisterIdLimit);
     return r.id() << RDShift;
+}
+
+uint32_t
+js::jit::RZ(FloatRegister r)
+{
+    MOZ_ASSERT(r.id() < FloatRegisters::RegisterIdLimit);
+    return r.id() << RZShift;
 }
 
 uint32_t
@@ -239,25 +240,14 @@ Assembler::trace(JSTracer* trc)
     }
 }
 
-int32_t
-Assembler::ExtractCodeLabelOffset(uint8_t* code) {
-    InstImm* inst = (InstImm*)code;
-    return Assembler::ExtractLuiOriValue(inst, inst->next());
-}
-
 void
-Assembler::Bind(uint8_t* rawCode, AbsoluteLabel* label, const void* address)
+Assembler::Bind(uint8_t* rawCode, CodeOffset* label, const void* address)
 {
-    if (label->used()) {
-        int32_t src = label->offset();
-        do {
-            Instruction* inst = (Instruction*) (rawCode + src);
-            uint32_t next = Assembler::ExtractLuiOriValue(inst, inst->next());
-            Assembler::UpdateLuiOriValue(inst, inst->next(), (uint32_t)address);
-            src = next;
-        } while (src != AbsoluteLabel::INVALID_OFFSET);
+    if (label->bound()) {
+        intptr_t offset = label->offset();
+        Instruction* inst = (Instruction*) (rawCode + offset);
+        Assembler::UpdateLuiOriValue(inst, inst->next(), (uint32_t)address);
     }
-    label->bind();
 }
 
 void
@@ -429,6 +419,13 @@ Assembler::PatchInstructionImmediate(uint8_t* code, PatchedImmPtr imm)
     Assembler::UpdateLuiOriValue(inst, inst->next(), (uint32_t)imm.value);
 }
 
+uint32_t
+Assembler::ExtractInstructionImmediate(uint8_t* code)
+{
+    InstImm* inst = (InstImm*)code;
+    return Assembler::ExtractLuiOriValue(inst, inst->next());
+}
+
 void
 Assembler::ToggleCall(CodeLocationLabel inst_, bool enabled)
 {
@@ -452,11 +449,12 @@ Assembler::ToggleCall(CodeLocationLabel inst_, bool enabled)
 }
 
 void
-Assembler::UpdateBoundsCheck(uint32_t heapSize, Instruction* inst)
+Assembler::UpdateBoundsCheck(uint8_t* patchAt, uint32_t heapLength)
 {
+    Instruction* inst = (Instruction*) patchAt;
     InstImm* i0 = (InstImm*) inst;
     InstImm* i1 = (InstImm*) i0->next();
 
     // Replace with new value
-    Assembler::UpdateLuiOriValue(i0, i1, heapSize);
+    Assembler::UpdateLuiOriValue(i0, i1, heapLength);
 }

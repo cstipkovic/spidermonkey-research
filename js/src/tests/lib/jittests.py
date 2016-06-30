@@ -25,6 +25,7 @@ JS_DIR = os.path.dirname(os.path.dirname(TESTS_LIB_DIR))
 TOP_SRC_DIR = os.path.dirname(os.path.dirname(JS_DIR))
 TEST_DIR = os.path.join(JS_DIR, 'jit-test', 'tests')
 LIB_DIR = os.path.join(JS_DIR, 'jit-test', 'lib') + os.path.sep
+MODULE_DIR = os.path.join(JS_DIR, 'jit-test', 'modules') + os.path.sep
 JS_CACHE_DIR = os.path.join(JS_DIR, 'jit-test', '.js-cache')
 JS_TESTS_DIR = posixpath.join(JS_DIR, 'tests')
 
@@ -113,10 +114,14 @@ class JitTest:
         self.tz_pacific = False # True means force Pacific time for the test
         self.test_also_noasmjs = False # True means run with and without asm.js
                                        # enabled.
+        self.test_also_wasm_baseline = False # True means run with and and without
+                                       # wasm baseline compiler enabled.
         self.test_also = [] # List of other configurations to test with.
         self.test_join = [] # List of other configurations to test with all existing variants.
         self.expect_error = '' # Errors to expect and consider passing
         self.expect_status = 0 # Exit status to expect from shell
+        self.is_module = False
+        self.test_reflect_stringify = None  # Reflect.stringify implementation to test
 
         # Expected by the test runner. Always true for jit-tests.
         self.enable = True
@@ -131,11 +136,14 @@ class JitTest:
         t.valgrind = self.valgrind
         t.tz_pacific = self.tz_pacific
         t.test_also_noasmjs = self.test_also_noasmjs
+        t.test_also_wasm_baseline = self.test_also_noasmjs
         t.test_also = self.test_also
         t.test_join = self.test_join
         t.expect_error = self.expect_error
         t.expect_status = self.expect_status
+        t.test_reflect_stringify = self.test_reflect_stringify
         t.enable = True
+        t.is_module = self.is_module
         return t
 
     def copy_and_extend_jitflags(self, variant):
@@ -210,16 +218,18 @@ class JitTest:
                     elif name == 'test-also-noasmjs':
                         if options.can_test_also_noasmjs:
                             test.test_also.append(['--no-asmjs'])
+                            # test-also-noasmjs is a sure indicator that the file contains asm.js code;
+                            # in that case we want to test the wasm baseline compiler too, as asm.js
+                            # is translated to wasm
+                            test.test_also.append(['--wasm-always-baseline'])
+                    elif name == 'test-also-wasm-baseline':
+                        test.test_also.append(['--wasm-always-baseline'])
                     elif name.startswith('test-also='):
                         test.test_also.append([name[len('test-also='):]])
                     elif name.startswith('test-join='):
                         test.test_join.append([name[len('test-join='):]])
-                    elif name == 'ion-eager':
-                        test.jitflags.append('--ion-eager')
-                    elif name == 'baseline-eager':
-                        test.jitflags.append('--baseline-eager')
-                    elif name == 'dump-bytecode':
-                        test.jitflags.append('--dump-bytecode')
+                    elif name == 'module':
+                        test.is_module = True
                     elif name.startswith('--'):
                         # // |jit-test| --ion-gvn=off; --no-sse4
                         test.jitflags.append(name)
@@ -230,9 +240,13 @@ class JitTest:
         if options.valgrind_all:
             test.valgrind = True
 
+        if options.test_reflect_stringify is not None:
+            test.expect_error = ''
+            test.expect_status = 0
+
         return test
 
-    def command(self, prefix, libdir, remote_prefix=None):
+    def command(self, prefix, libdir, moduledir, remote_prefix=None):
         path = self.path
         if remote_prefix:
             path = self.path.replace(TEST_DIR, remote_prefix)
@@ -257,7 +271,14 @@ class JitTest:
         # We may have specified '-a' or '-d' twice: once via --jitflags, once
         # via the "|jit-test|" line.  Remove dups because they are toggles.
         cmd = prefix + ['--js-cache', JitTest.CacheDir]
-        cmd += list(set(self.jitflags)) + ['-e', expr, '-f', path]
+        cmd += list(set(self.jitflags)) + ['-e', expr]
+        if self.is_module:
+            cmd += ['--module-load-path', moduledir]
+            cmd += ['--module', path]
+        elif self.test_reflect_stringify is None:
+            cmd += ['-f', path]
+        else:
+            cmd += ['--', self.test_reflect_stringify, "--check", path]
         if self.valgrind:
             cmd = self.VALGRIND_CMD + cmd
         return cmd
@@ -266,7 +287,7 @@ class JitTest:
     js_cmd_prefix = None
     def get_command(self, prefix):
         """Shim for the test runner."""
-        return self.command(prefix, LIB_DIR)
+        return self.command(prefix, LIB_DIR, MODULE_DIR)
 
 
 def find_tests(substring=None):
@@ -279,7 +300,7 @@ def find_tests(substring=None):
         for filename in filenames:
             if not filename.endswith('.js'):
                 continue
-            if filename in ('shell.js', 'browser.js', 'jsref.js'):
+            if filename in ('shell.js', 'browser.js'):
                 continue
             test = os.path.join(dirpath, filename)
             if substring is None \
@@ -288,8 +309,11 @@ def find_tests(substring=None):
     return ans
 
 def run_test_remote(test, device, prefix, options):
+    if options.test_reflect_stringify:
+        raise ValueError("can't run Reflect.stringify tests remotely")
     cmd = test.command(prefix,
                        posixpath.join(options.remote_test_root, 'lib/'),
+                       posixpath.join(options.remote_test_root, 'modules/'),
                        posixpath.join(options.remote_test_root, 'tests'))
     if options.show_cmd:
         print(subprocess.list2cmdline(cmd))
@@ -526,20 +550,20 @@ def process_test_results(results, num_tests, pb, options):
     pb.finish(True)
     return print_test_summary(num_tests, failures, complete, doing, options)
 
-def run_tests(tests, prefix, options):
+def run_tests(tests, num_tests, prefix, options):
     # The jstests tasks runner requires the following options. The names are
     # taken from the jstests options processing code, which are frequently
     # subtly different from the options jit-tests expects. As such, we wrap
     # them here, as needed.
-    AdaptorOptions = namedtuple("AdaptorOptions", ["worker_count",
-        "passthrough", "timeout", "output_fp", "hide_progress", "run_skipped"])
+    AdaptorOptions = namedtuple("AdaptorOptions", [
+        "worker_count", "passthrough", "timeout", "output_fp",
+        "hide_progress", "run_skipped", "show_cmd"])
     shim_options = AdaptorOptions(options.max_jobs, False, options.timeout,
-                                  sys.stdout, False, True)
+                                  sys.stdout, False, True, options.show_cmd)
 
     # The test runner wants the prefix as a static on the Test class.
     JitTest.js_cmd_prefix = prefix
 
-    num_tests = len(tests) * options.repeat
     pb = create_progressbar(num_tests, options)
     gen = run_all_tests(tests, prefix, pb, shim_options)
     ok = process_test_results(gen, num_tests, pb, options)
@@ -575,7 +599,7 @@ def push_progs(options, device, progs):
                                      os.path.basename(local_file))
         device.pushFile(local_file, remote_file)
 
-def run_tests_remote(tests, prefix, options):
+def run_tests_remote(tests, num_tests, prefix, options):
     # Setup device with everything needed to run our tests.
     from mozdevice import devicemanagerADB, devicemanagerSUT
 
@@ -623,7 +647,6 @@ def run_tests_remote(tests, prefix, options):
     prefix[0] = os.path.join(options.remote_test_root, 'js')
 
     # Run all tests.
-    num_tests = len(tests) * options.repeat
     pb = create_progressbar(num_tests, options)
     gen = get_remote_results(tests, dm, prefix, options)
     ok = process_test_results(gen, num_tests, pb, options)

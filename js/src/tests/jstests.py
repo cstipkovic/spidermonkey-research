@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 """
 The JS Shell Test Harness.
 
@@ -7,7 +11,7 @@ See the adjacent README.txt for more details.
 
 from __future__ import print_function
 
-import os, sys, textwrap
+import os, sys, textwrap, platform
 from os.path import abspath, dirname, isfile, realpath
 from contextlib import contextmanager
 from copy import copy
@@ -83,6 +87,9 @@ def parse_args():
     harness_og.add_option('--passthrough', action='store_true',
                           help='Run tests with stdin/stdout attached to'
                           ' caller.')
+    harness_og.add_option('--test-reflect-stringify', dest="test_reflect_stringify",
+                          help="instead of running tests, use them to test the "
+                          "Reflect.stringify code in specified file")
     harness_og.add_option('--valgrind', action='store_true',
                           help='Run tests in valgrind.')
     harness_og.add_option('--valgrind-args', default='',
@@ -165,7 +172,14 @@ def parse_args():
         op.error("--valgrind, --debug, and --rr are mutually exclusive.")
 
     # Fill the debugger field, as needed.
-    debugger_prefix = options.debugger.split() if options.debug else []
+    if options.debug:
+        if options.debugger == 'lldb':
+            debugger_prefix = ['lldb', '--']
+        else:
+            debugger_prefix = options.debugger.split()
+    else:
+        debugger_prefix = []
+
     if options.valgrind:
         debugger_prefix = ['valgrind'] + options.valgrind_args.split()
         if os.uname()[0] == 'Darwin':
@@ -250,6 +264,18 @@ def load_tests(options, requested_paths, excluded_paths):
     test_gen = manifest.load_reftests(test_dir, requested_paths, excluded_paths,
                                       xul_tester)
 
+    if options.test_reflect_stringify is not None:
+        def trs_gen(tests):
+            for test in tests:
+                test.test_reflect_stringify = options.test_reflect_stringify
+                # Even if the test is not normally expected to pass, we still
+                # expect reflect-stringify to be able to handle it.
+                test.expect = True
+                test.random = False
+                test.slow = False
+                yield test
+        test_gen = trs_gen(test_gen)
+
     if options.make_manifests:
         manifest.make_manifests(options.make_manifests, test_gen)
         sys.exit()
@@ -296,11 +322,7 @@ def load_tests(options, requested_paths, excluded_paths):
         test_gen = (_ for _ in test_gen if not _.slow)
 
     if options.repeat:
-        def repeat_gen(tests):
-            for test in tests:
-                for i in range(options.repeat):
-                    yield test
-        test_gen = repeat_gen(test_gen)
+        test_gen = (test for test in test_gen for i in range(options.repeat))
         test_count *= options.repeat
 
     return test_count, test_gen
@@ -308,9 +330,15 @@ def load_tests(options, requested_paths, excluded_paths):
 
 def main():
     options, prefix, requested_paths, excluded_paths = parse_args()
-    if options.js_shell is not None and not isfile(options.js_shell):
-        print('Could not find shell at given path.')
-        return 1
+    if options.js_shell is not None and not (isfile(options.js_shell) and
+                                             os.access(options.js_shell, os.X_OK)):
+        if (platform.system() != 'Windows' or
+            isfile(options.js_shell) or not
+            isfile(options.js_shell + ".exe") or not
+            os.access(options.js_shell + ".exe", os.X_OK)):
+           print('Could not find executable shell: ' + options.js_shell)
+           return 1
+
     test_count, test_gen = load_tests(options, requested_paths, excluded_paths)
     test_environment = get_environment_overlay(options.js_shell)
 
@@ -321,15 +349,14 @@ def main():
     test_dir = dirname(abspath(__file__))
 
     if options.debug:
-        tests = list(test_gen)
-        if len(tests) > 1:
+        if test_count > 1:
             print('Multiple tests match command line arguments,'
                   ' debugger can only run one')
-            for tc in tests:
+            for tc in test_gen:
                 print('    {}'.format(tc.path))
             return 2
 
-        cmd = tests[0].get_command(prefix)
+        cmd = test_gen.next().get_command(prefix)
         if options.show_cmd:
             print(list2cmdline(cmd))
         with changedir(test_dir), change_env(test_environment):

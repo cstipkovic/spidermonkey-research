@@ -7,6 +7,7 @@
 #include "jit/PerfSpewer.h"
 
 #include "mozilla/IntegerPrintfMacros.h"
+#include "mozilla/SizePrintfMacros.h"
 
 #if defined(__linux__)
 # include <unistd.h>
@@ -51,7 +52,7 @@ static bool PerfChecked = false;
 
 static FILE* PerfFilePtr = nullptr;
 
-static PRLock* PerfMutex;
+static js::Mutex* PerfMutex;
 
 static bool
 openPerfMap(const char* dir)
@@ -95,9 +96,9 @@ js::jit::CheckPerf() {
         }
 
         if (PerfMode != PERF_MODE_NONE) {
-            PerfMutex = PR_NewLock();
+            PerfMutex = js_new<js::Mutex>();
             if (!PerfMutex)
-                MOZ_CRASH();
+                MOZ_CRASH("failed to allocate PerfMutex");
 
             if (openPerfMap(PERF_SPEW_DIR)) {
                 PerfChecked = true;
@@ -135,7 +136,7 @@ lockPerfMap(void)
     if (!PerfEnabled())
         return false;
 
-    PR_Lock(PerfMutex);
+    PerfMutex->lock();
 
     MOZ_ASSERT(PerfFilePtr);
     return true;
@@ -146,7 +147,7 @@ unlockPerfMap()
 {
     MOZ_ASSERT(PerfFilePtr);
     fflush(PerfFilePtr);
-    PR_Unlock(PerfMutex);
+    PerfMutex->unlock();
 }
 
 uint32_t PerfSpewer::nextFunctionIndex = 0;
@@ -332,21 +333,6 @@ js::jit::writePerfSpewerAsmJSFunctionMap(uintptr_t base, uintptr_t size,
 
     fprintf(PerfFilePtr, "%" PRIxPTR " %" PRIxPTR " %s:%u:%u: Function %s\n",
             base, size, filename, lineno, colIndex, funcName);
-
-    unlockPerfMap();
-}
-
-void
-js::jit::writePerfSpewerAsmJSEntriesAndExits(uintptr_t base, size_t size)
-{
-    if (size == 0)
-        return;
-
-    if (!lockPerfMap())
-        return;
-
-    fprintf(PerfFilePtr, "%" PRIxPTR " %" PRIxSIZE " AsmJS Entries and Exits (0x%" PRIxPTR " 0x%" PRIxSIZE ")\n",
-            base, size, base, size);
 
     unlockPerfMap();
 }

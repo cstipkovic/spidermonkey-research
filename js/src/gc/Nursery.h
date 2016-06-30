@@ -110,7 +110,7 @@ class Nursery
     {}
     ~Nursery();
 
-    bool init(uint32_t maxNurseryBytes);
+    MOZ_MUST_USE bool init(uint32_t maxNurseryBytes);
 
     bool exists() const { return numNurseryChunks_ != 0; }
     size_t numChunks() const { return numNurseryChunks_; }
@@ -171,7 +171,7 @@ class Nursery
      * sets |*ref| to the new location of the object and returns true. Otherwise
      * returns false and leaves |*ref| unset.
      */
-    MOZ_ALWAYS_INLINE bool getForwardedPointer(JSObject** ref) const;
+    MOZ_ALWAYS_INLINE MOZ_MUST_USE bool getForwardedPointer(JSObject** ref) const;
 
     /* Forward a slots/elements pointer stored in an Ion frame. */
     void forwardBufferPointer(HeapSlot** pSlotsElems);
@@ -188,7 +188,7 @@ class Nursery
 
     void waitBackgroundFreeEnd();
 
-    bool addedUniqueIdToCell(gc::Cell* cell) {
+    MOZ_MUST_USE bool addedUniqueIdToCell(gc::Cell* cell) {
         if (!IsInsideNursery(cell) || !isEnabled())
             return true;
         MOZ_ASSERT(cellsWithUid_.initialized());
@@ -216,6 +216,11 @@ class Nursery
 
     MOZ_ALWAYS_INLINE uintptr_t heapEnd() const {
         return heapEnd_;
+    }
+
+    // Free space remaining, not counting chunk trailers.
+    MOZ_ALWAYS_INLINE size_t approxFreeSpace() const {
+        return heapEnd_ - position_;
     }
 
 #ifdef JS_GC_ZEAL
@@ -303,8 +308,8 @@ class Nursery
     struct NurseryChunkLayout {
         char data[NurseryChunkUsableSize];
         gc::ChunkTrailer trailer;
-        uintptr_t start() { return uintptr_t(&data); }
-        uintptr_t end() { return uintptr_t(&trailer); }
+        uintptr_t start() const { return uintptr_t(&data); }
+        uintptr_t end() const { return uintptr_t(&trailer); }
     };
     static_assert(sizeof(NurseryChunkLayout) == gc::ChunkSize,
                   "Nursery chunk size must match gc::Chunk size.");
@@ -328,7 +333,7 @@ class Nursery
         initChunk(chunkno);
     }
 
-    void updateDecommittedRegion();
+    void updateNumActiveChunks(int newCount);
 
     MOZ_ALWAYS_INLINE uintptr_t allocationEnd() const {
         MOZ_ASSERT(numActiveChunks_ > 0);

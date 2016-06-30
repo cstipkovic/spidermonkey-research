@@ -44,16 +44,21 @@ class ABIArgGenerator
 
         return usedArgSlots_ * sizeof(intptr_t);
     }
-
-    static const Register NonArgReturnReg0;
-    static const Register NonArgReturnReg1;
-    static const Register NonArg_VolatileReg;
-    static const Register NonReturn_VolatileReg0;
-    static const Register NonReturn_VolatileReg1;
 };
+
+static MOZ_CONSTEXPR_VAR Register ABINonArgReg0 = t0;
+static MOZ_CONSTEXPR_VAR Register ABINonArgReg1 = t1;
+static MOZ_CONSTEXPR_VAR Register ABINonArgReturnReg0 = t0;
+static MOZ_CONSTEXPR_VAR Register ABINonArgReturnReg1 = t1;
+
+// Registers used for asm.js/wasm table calls. These registers must be disjoint
+// from the ABI argument registers and from each other.
+static MOZ_CONSTEXPR_VAR Register WasmTableCallPtrReg = ABINonArgReg0;
+static MOZ_CONSTEXPR_VAR Register WasmTableCallSigReg = ABINonArgReg1;
 
 static MOZ_CONSTEXPR_VAR Register JSReturnReg_Type = a3;
 static MOZ_CONSTEXPR_VAR Register JSReturnReg_Data = a2;
+static MOZ_CONSTEXPR_VAR Register64 ReturnReg64(InvalidReg, InvalidReg);
 static MOZ_CONSTEXPR_VAR FloatRegister ReturnFloat32Reg = { FloatRegisters::f0, FloatRegister::Single };
 static MOZ_CONSTEXPR_VAR FloatRegister ReturnDoubleReg = { FloatRegisters::f0, FloatRegister::Double };
 static MOZ_CONSTEXPR_VAR FloatRegister ScratchFloat32Reg = { FloatRegisters::f18, FloatRegister::Single };
@@ -98,6 +103,14 @@ static_assert(JitStackAlignment % sizeof(Value) == 0 && JitStackValueAlignment >
 static MOZ_CONSTEXPR_VAR uint32_t SimdMemoryAlignment = 8;
 static MOZ_CONSTEXPR_VAR uint32_t AsmJSStackAlignment = SimdMemoryAlignment;
 
+// Does this architecture support SIMD conversions between Uint32x4 and Float32x4?
+static MOZ_CONSTEXPR_VAR bool SupportsUint32x4FloatConversions = false;
+
+// Does this architecture support comparisons of unsigned integer vectors?
+static MOZ_CONSTEXPR_VAR bool SupportsUint8x16Compares = false;
+static MOZ_CONSTEXPR_VAR bool SupportsUint16x8Compares = false;
+static MOZ_CONSTEXPR_VAR bool SupportsUint32x4Compares = false;
+
 static MOZ_CONSTEXPR_VAR Scale ScalePointer = TimesFour;
 
 class Assembler : public AssemblerMIPSShared
@@ -124,7 +137,7 @@ class Assembler : public AssemblerMIPSShared
     using AssemblerMIPSShared::bind;
 
     void bind(RepatchLabel* label);
-    void Bind(uint8_t* rawCode, AbsoluteLabel* label, const void* address);
+    void Bind(uint8_t* rawCode, CodeOffset* label, const void* address);
 
     static void TraceJumpRelocations(JSTracer* trc, JitCode* code, CompactBufferReader& reader);
     static void TraceDataRelocations(JSTracer* trc, JitCode* code, CompactBufferReader& reader);
@@ -149,11 +162,11 @@ class Assembler : public AssemblerMIPSShared
                                         PatchedImmPtr expectedValue);
 
     static void PatchInstructionImmediate(uint8_t* code, PatchedImmPtr imm);
+    static uint32_t ExtractInstructionImmediate(uint8_t* code);
 
     static void ToggleCall(CodeLocationLabel inst_, bool enabled);
 
-    static void UpdateBoundsCheck(uint32_t logHeapSize, Instruction* inst);
-    static int32_t ExtractCodeLabelOffset(uint8_t* code);
+    static void UpdateBoundsCheck(uint8_t* patchAt, uint32_t heapLength);
 }; // Assembler
 
 static const uint32_t NumIntArgRegs = 4;

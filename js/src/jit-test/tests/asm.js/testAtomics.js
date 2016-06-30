@@ -1,4 +1,5 @@
 // |jit-test| test-also-noasmjs
+
 if (!this.SharedArrayBuffer || !this.Atomics)
     quit();
 
@@ -8,30 +9,8 @@ if (!this.SharedArrayBuffer || !this.Atomics)
 load(libdir + "asm.js");
 load(libdir + "asserts.js");
 
-// This hack allows the test cases to run with --no-asmjs: the field values
-// are basically ignored in asm.js mode, and the correct (Firefox-specific)
-// field values are used in non-asm.js mode.  If run in a non-Firefox
-// browser that does not have the parallel type hierarchy this should also
-// work.
-//
-// This hack will be removed when the parallel type hierarchy is removed
-// from Firefox, bug 1176214.
-
-const atomicStdlib = {
-    Atomics:      Atomics,
-    Int8Array:    this.SharedInt8Array ? SharedInt8Array : Int8Array,
-    Uint8Array:   this.SharedUint8Array ? SharedUint8Array : Uint8Array,
-    Int16Array:   this.SharedInt16Array ? SharedInt16Array : Int16Array,
-    Uint16Array:  this.SharedUint16Array ? SharedUint16Array : Uint16Array,
-    Int32Array:   this.SharedInt32Array ? SharedInt32Array : Int32Array,
-    Uint32Array:  this.SharedUint32Array ? SharedUint32Array : Uint32Array,
-    Float32Array: this.SharedFloat32Array ? SharedFloat32Array : Float32Array,
-    Float64Array: this.SharedFloat64Array ? SharedFloat64Array : Float64Array
-};
-
 var loadModule_int32_code =
     USE_ASM + `
-    var atomic_fence = stdlib.Atomics.fence;
     var atomic_load = stdlib.Atomics.load;
     var atomic_store = stdlib.Atomics.store;
     var atomic_cmpxchg = stdlib.Atomics.compareExchange;
@@ -43,10 +22,6 @@ var loadModule_int32_code =
     var atomic_xor = stdlib.Atomics.xor;
 
     var i32a = new stdlib.Int32Array(heap);
-
-    function do_fence() {
-        atomic_fence();
-    }
 
     // Load element 0
     function do_load() {
@@ -224,8 +199,7 @@ var loadModule_int32_code =
         return v|0;
     }
 
-    return { fence: do_fence,
-        load: do_load,
+    return { load: do_load,
         load_i: do_load_i,
         store: do_store,
         store_i: do_store_i,
@@ -253,12 +227,10 @@ var loadModule_int32_code =
 var loadModule_int32 = asmCompile('stdlib', 'foreign', 'heap', loadModule_int32_code);
 
 function test_int32(heap) {
-    var i32a = new SharedInt32Array(heap);
-    var i32m = asmLink(loadModule_int32, atomicStdlib, {}, heap);
+    var i32a = new Int32Array(heap);
+    var i32m = asmLink(loadModule_int32, this, {}, heap);
 
-    var size = SharedInt32Array.BYTES_PER_ELEMENT;
-
-    i32m.fence();
+    var size = Int32Array.BYTES_PER_ELEMENT;
 
     i32a[0] = 12345;
     assertEq(i32m.load(), 12345);
@@ -348,7 +320,6 @@ function test_int32(heap) {
 
 var loadModule_uint32_code =
     USE_ASM + `
-    var atomic_fence = stdlib.Atomics.fence;
     var atomic_load = stdlib.Atomics.load;
     var atomic_store = stdlib.Atomics.store;
     var atomic_cmpxchg = stdlib.Atomics.compareExchange;
@@ -536,10 +507,10 @@ var loadModule_uint32_code =
 var loadModule_uint32 = asmCompile('stdlib', 'foreign', 'heap', loadModule_uint32_code);
 
 function test_uint32(heap) {
-    var i32a = new SharedUint32Array(heap);
-    var i32m = loadModule_uint32(atomicStdlib, {}, heap);
+    var i32a = new Uint32Array(heap);
+    var i32m = loadModule_uint32(this, {}, heap);
 
-    var size = SharedUint32Array.BYTES_PER_ELEMENT;
+    var size = Uint32Array.BYTES_PER_ELEMENT;
 
     i32a[0] = 12345;
     assertEq(i32m.load(), 12345);
@@ -629,7 +600,6 @@ function test_uint32(heap) {
 
 var loadModule_int16_code =
     USE_ASM + `
-    var atomic_fence = stdlib.Atomics.fence;
     var atomic_load = stdlib.Atomics.load;
     var atomic_store = stdlib.Atomics.store;
     var atomic_cmpxchg = stdlib.Atomics.compareExchange;
@@ -641,10 +611,6 @@ var loadModule_int16_code =
     var atomic_xor = stdlib.Atomics.xor;
 
     var i16a = new stdlib.Int16Array(heap);
-
-    function do_fence() {
-        atomic_fence();
-    }
 
     // Load element 0
     function do_load() {
@@ -796,8 +762,7 @@ var loadModule_int16_code =
         return v|0;
     }
 
-    return { fence: do_fence,
-        load: do_load,
+    return { load: do_load,
         load_i: do_load_i,
         store: do_store,
         store_i: do_store_i,
@@ -822,12 +787,10 @@ var loadModule_int16_code =
 var loadModule_int16 = asmCompile('stdlib', 'foreign', 'heap', loadModule_int16_code);
 
 function test_int16(heap) {
-    var i16a = new SharedInt16Array(heap);
-    var i16m = loadModule_int16(atomicStdlib, {}, heap);
+    var i16a = new Int16Array(heap);
+    var i16m = loadModule_int16(this, {}, heap);
 
-    var size = SharedInt16Array.BYTES_PER_ELEMENT;
-
-    i16m.fence();
+    var size = Int16Array.BYTES_PER_ELEMENT;
 
     i16a[0] = 12345;
     assertEq(i16m.load(), 12345);
@@ -1112,10 +1075,10 @@ var loadModule_uint16_code =
 var loadModule_uint16 = asmCompile('stdlib', 'foreign', 'heap', loadModule_uint16_code);
 
 function test_uint16(heap) {
-    var i16a = new SharedUint16Array(heap);
-    var i16m = loadModule_uint16(atomicStdlib, {}, heap);
+    var i16a = new Uint16Array(heap);
+    var i16m = loadModule_uint16(this, {}, heap);
 
-    var size = SharedUint16Array.BYTES_PER_ELEMENT;
+    var size = Uint16Array.BYTES_PER_ELEMENT;
 
     i16a[0] = 12345;
     assertEq(i16m.load(), 12345);
@@ -1400,13 +1363,13 @@ var loadModule_int8_code =
 var loadModule_int8 = asmCompile('stdlib', 'foreign', 'heap', loadModule_int8_code);
 
 function test_int8(heap) {
-    var i8a = new SharedInt8Array(heap);
-    var i8m = loadModule_int8(atomicStdlib, {}, heap);
+    var i8a = new Int8Array(heap);
+    var i8m = loadModule_int8(this, {}, heap);
 
     for ( var i=0 ; i < i8a.length ; i++ )
-	i8a[i] = 0;
+        i8a[i] = 0;
 
-    var size = SharedInt8Array.BYTES_PER_ELEMENT;
+    var size = Int8Array.BYTES_PER_ELEMENT;
 
     i8a[0] = 123;
     assertEq(i8m.load(), 123);
@@ -1681,13 +1644,13 @@ var loadModule_uint8_code =
 var loadModule_uint8 = asmCompile('stdlib', 'foreign', 'heap', loadModule_uint8_code);
 
 function test_uint8(heap) {
-    var i8a = new SharedUint8Array(heap);
-    var i8m = loadModule_uint8(atomicStdlib, {}, heap);
+    var i8a = new Uint8Array(heap);
+    var i8m = loadModule_uint8(this, {}, heap);
 
     for ( var i=0 ; i < i8a.length ; i++ )
 	i8a[i] = 0;
 
-    var size = SharedUint8Array.BYTES_PER_ELEMENT;
+    var size = Uint8Array.BYTES_PER_ELEMENT;
 
     i8a[0] = 123;
     assertEq(i8m.load(), 123);
@@ -1837,21 +1800,20 @@ var loadModule_misc_code =
 var loadModule_misc = asmCompile('stdlib', 'foreign', 'heap', loadModule_misc_code);
 
 function test_misc(heap) {
-    var misc = loadModule_misc(atomicStdlib, {}, heap);
+    var misc = loadModule_misc(this, {}, heap);
 
-    assertEq(misc.ilf1(), 1);
-    assertEq(misc.ilf2(), 1);
+    assertEq(misc.ilf1(), 1);   // Guaranteed by SpiderMonkey, not spec
+    assertEq(misc.ilf2(), 1);   // Guaranteed by SpiderMonkey, not spec
     assertEq(misc.ilf3(), 0);
-    assertEq(misc.ilf4(), 1);
+    assertEq(misc.ilf4(), 1);   // Guaranteed by SpiderMonkey, not spec
     assertEq(misc.ilf5(), 0);
     assertEq(misc.ilf6(), 0);
     assertEq(misc.ilf7(), 0);
-    var v = misc.ilf8();
-    assertEq(v === 0 || v === 1, true);
+    assertEq(misc.ilf8(), 0);   // Required by spec, for now
     assertEq(misc.ilf9(), 0);
 }
 
-// SharedUint8ClampedArray is not supported for asm.js.
+// Shared-memory Uint8ClampedArray is not supported for asm.js.
 
 var heap = new SharedArrayBuffer(65536);
 
@@ -1862,6 +1824,21 @@ test_uint16(heap);
 test_int32(heap);
 test_uint32(heap);
 test_misc(heap);
+
+// Bug 1254167: Effective Address Analysis should be void on atomics accesses,
+var code = `
+    "use asm";
+    var HEAP32 = new stdlib.Int32Array(heap);
+    var load = stdlib.Atomics.load;
+    function f() {
+        var i2 = 0;
+        i2 = 305002 | 0;
+        return load(HEAP32, i2 >> 2) | 0;
+    }
+    return f;
+`;
+var f = asmLink(asmCompile('stdlib', 'ffi', 'heap', code), this, {}, new SharedArrayBuffer(0x10000));
+assertErrorMessage(f, RangeError, /out-of-range index/);
 
 // Test that ARM callouts compile.
 setARMHwCapFlags('vfp');
@@ -1879,3 +1856,4 @@ asmCompile('stdlib', 'ffi', 'heap',
 
     return { xchg: do_xchg }
 `);
+

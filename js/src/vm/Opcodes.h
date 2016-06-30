@@ -18,9 +18,6 @@
  * FOR_EACH_TRAILING_UNUSED_OPCODE and updating js::detail::LastDefinedOpcode
  * below.
  *
- * When changing the bytecode, don't forget to update XDR_BYTECODE_VERSION in
- * vm/Xdr.h!
- *
  * Includers must define a macro with the following form:
  *
  * #define MACRO(op,val,name,image,length,nuses,ndefs,format) ...
@@ -607,13 +604,13 @@
      */ \
     macro(JSOP_NULL,      64, js_null_str,  js_null_str,  1,  0,  1, JOF_BYTE) \
     /*
-     * Pushes 'this' value for current stack frame onto the stack.
-     *   Category: Variables and Scopes
-     *   Type: This
+     * Pushes 'JS_IS_CONSTRUCTING'
+     *   Category: Literals
+     *   Type: Constants
      *   Operands:
-     *   Stack: => this
+     *   Stack: => JS_IS_CONSTRUCTING
      */ \
-    macro(JSOP_THIS,      65, js_this_str,  js_this_str,  1,  0,  1, JOF_BYTE) \
+    macro(JSOP_IS_CONSTRUCTING,  65, "is-constructing",   NULL,         1,  0,  1, JOF_BYTE) \
     /*
      * Pushes boolean value onto the stack.
      *   Category: Literals
@@ -1333,14 +1330,14 @@
      */ \
     macro(JSOP_LAMBDA,    130, "lambda",    NULL,         5,  0,  1, JOF_OBJECT) \
     /*
-     * Pops the top of stack value as 'this', pushes an arrow function with
-     * 'this' onto the stack.
+     * Pops the top of stack value as 'new.target', pushes an arrow function with
+     * lexical 'new.target' onto the stack.
      *   Category: Statements
      *   Type: Function
      *   Operands: uint32_t funcIndex
-     *   Stack: this => obj
+     *   Stack: new.target => obj
      */ \
-    macro(JSOP_LAMBDA_ARROW, 131, "lambda_arrow", NULL,   5,  2,  1, JOF_OBJECT) \
+    macro(JSOP_LAMBDA_ARROW, 131, "lambda_arrow", NULL,   5,  1,  1, JOF_OBJECT) \
     \
     /*
      * Pushes current callee onto the stack.
@@ -1481,7 +1478,16 @@
      *   Stack: val => val
      */ \
     macro(JSOP_SETINTRINSIC,  144, "setintrinsic",  NULL, 5,  1,  1, JOF_ATOM|JOF_NAME|JOF_SET|JOF_DETECTING) \
-    macro(JSOP_UNUSED145,     145, "unused145",     NULL, 1,  0,  0, JOF_BYTE) \
+    /*
+     * Like JSOP_CALL, but used as part of for-of and destructuring bytecode
+     * to provide better error messages.
+     *   Category: Statements
+     *   Type: Function
+     *   Operands: uint16_t argc (must be 0)
+     *   Stack: callee, this => rval
+     *   nuses: 2
+     */ \
+    macro(JSOP_CALLITER,      145, "calliter",      NULL, 3, -1,  1, JOF_UINT16|JOF_INVOKE|JOF_TYPESET) \
     /*
      * Initialize a non-configurable, non-writable, non-enumerable data-property on an object.
      *
@@ -1513,16 +1519,7 @@
      *   Stack: => new.target
      */ \
     macro(JSOP_NEWTARGET,  148, "newtarget", NULL,      1,  0,  1,  JOF_BYTE) \
-    \
-    /*
-     * Placeholder opcode used during bytecode generation. This never
-     * appears in a finished script. FIXME: bug 473671.
-     *   Category: Statements
-     *   Type: Jumps
-     *   Operands: int32_t offset
-     *   Stack: =>
-     */ \
-    macro(JSOP_BACKPATCH,     149,"backpatch", NULL,      5,  0,  0,  JOF_JUMP) \
+    macro(JSOP_UNUSED149,  149, "unused149", NULL,      1,  0,  0,  JOF_BYTE) \
     /*
      * Pops the top two values 'lval' and 'rval' from the stack, then pushes
      * the result of 'Math.pow(lval, rval)'.
@@ -1666,16 +1663,14 @@
      *   Stack: =>
      */ \
     macro(JSOP_DEFLET,        162,"deflet",     NULL,     5,  0,  0,  JOF_ATOM) \
-    \
     /*
-     * Bind the |this| value of a function to the supplied value.
-     *
-     *   Category: Variables and Scopes
-     *   Type: This
+     * Throw if the value on the stack is not coerscible to an object (is |null| or |undefined|).
+     *   Category: Literals
+     *   Type: Object
      *   Operands:
-     *   Stack: this => this
+     *   Stack: val => val
      */ \
-    macro(JSOP_SETTHIS,       163,"setthis",    NULL,     1,  1,  1,  JOF_BYTE) \
+    macro(JSOP_CHECKOBJCOERCIBLE, 163, "checkobjcoercible", NULL, 1,  1,  1, JOF_BYTE) \
     /*
      * Find the function to invoke with |super()| on the scope chain.
      *
@@ -1744,14 +1739,90 @@
      *   Stack: =>
      */ \
     macro(JSOP_THROWSETALIASEDCONST, 170, "throwsetaliasedconst", NULL, 5,  1,  1, JOF_SCOPECOORD|JOF_NAME|JOF_SET|JOF_DETECTING) \
-    macro(JSOP_UNUSED171,     171,"unused171",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED172,     172,"unused172",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED173,     173,"unused173",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED174,     174,"unused174",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED175,     175,"unused175",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED176,     176,"unused176",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED177,     177,"unused177",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED178,     178,"unused178",  NULL,     1,  0,  0,  JOF_BYTE) \
+    /*
+     * Initialize a non-enumerable getter in an object literal.
+     *
+     * Pops the top two values on the stack as 'val' and 'obj', defines
+     * getter of 'obj' as 'val', pushes 'obj' onto the stack.
+     *   Category: Literals
+     *   Type: Object
+     *   Operands: uint32_t nameIndex
+     *   Stack: obj, val => obj
+     */ \
+    macro(JSOP_INITHIDDENPROP_GETTER,  171, "inithiddenprop_getter",   NULL, 5,  2,  1, JOF_ATOM|JOF_PROP|JOF_SET|JOF_DETECTING) \
+    /*
+     * Initialize a non-enumerable setter in an object literal.
+     *
+     * Pops the top two values on the stack as 'val' and 'obj', defines
+     * setter of 'obj' as 'val', pushes 'obj' onto the stack.
+     *   Category: Literals
+     *   Type: Object
+     *   Operands: uint32_t nameIndex
+     *   Stack: obj, val => obj
+     */ \
+    macro(JSOP_INITHIDDENPROP_SETTER,  172, "inithiddenprop_setter",   NULL, 5,  2,  1, JOF_ATOM|JOF_PROP|JOF_SET|JOF_DETECTING) \
+    /*
+     * Initialize a non-enumerable numeric getter in an object literal like
+     * '{get 2() {}}'.
+     *
+     * Pops the top three values on the stack as 'val', 'id' and 'obj', defines
+     * 'id' getter of 'obj' as 'val', pushes 'obj' onto the stack.
+     *   Category: Literals
+     *   Type: Object
+     *   Operands:
+     *   Stack: obj, id, val => obj
+     */ \
+    macro(JSOP_INITHIDDENELEM_GETTER,  173, "inithiddenelem_getter",   NULL, 1,  3,  1, JOF_BYTE|JOF_ELEM|JOF_SET|JOF_DETECTING) \
+    /*
+     * Initialize a non-enumerable numeric setter in an object literal like
+     * '{set 2(v) {}}'.
+     *
+     * Pops the top three values on the stack as 'val', 'id' and 'obj', defines
+     * 'id' setter of 'obj' as 'val', pushes 'obj' onto the stack.
+     *   Category: Literals
+     *   Type: Object
+     *   Operands:
+     *   Stack: obj, id, val => obj
+     */ \
+    macro(JSOP_INITHIDDENELEM_SETTER, 174, "inithiddenelem_setter",   NULL, 1,  3,  1, JOF_BYTE|JOF_ELEM|JOF_SET|JOF_DETECTING) \
+    /*
+     * Initialize a non-enumerable numeric property in an object literal, like '{1: x}'.
+     *
+     * Pops the top three values on the stack as 'val', 'id' and 'obj', defines
+     * 'id' property of 'obj' as 'val', pushes 'obj' onto the stack.
+     *   Category: Literals
+     *   Type: Object
+     *   Operands:
+     *   Stack: obj, id, val => obj
+     */ \
+    macro(JSOP_INITHIDDENELEM,  175, "inithiddenelem",   NULL,         1,  3,  1, JOF_BYTE|JOF_ELEM|JOF_SET|JOF_DETECTING) \
+    /*
+     * Gets the value of a module import by name and pushes it onto the stack.
+     *   Category: Variables and Scopes
+     *   Type: Variables
+     *   Operands: uint32_t nameIndex
+     *   Stack: => val
+     */ \
+    macro(JSOP_GETIMPORT,     176,"getimport",  NULL,     5,  0,  1,  JOF_ATOM|JOF_NAME|JOF_TYPESET) \
+    /*
+     * Examines the top stack value, asserting that it's either a self-hosted
+     * function or a self-hosted intrinsic. This opcode does nothing in a
+     * non-debug build.
+     *   Category: Other
+     *   Operands:
+     *   Stack: checkVal => checkVal
+     */ \
+    macro(JSOP_DEBUGCHECKSELFHOSTED, 177,"debug-checkselfhosted",  NULL, 1,  1,  1,  JOF_BYTE) \
+    /*
+     * Pops the top stack value, pushes the value and a boolean value that
+     * indicates whether the spread operation for the value can be optimized
+     * in spread call.
+     *   Category: Statements
+     *   Type: Function
+     *   Operands:
+     *   Stack: arr => arr optimized
+     */ \
+    macro(JSOP_OPTIMIZE_SPREADCALL,178,"optimize-spreadcall", NULL, 1,  1,  2,  JOF_BYTE) \
     macro(JSOP_UNUSED179,     179,"unused179",  NULL,     1,  0,  0,  JOF_BYTE) \
     macro(JSOP_UNUSED180,     180,"unused180",  NULL,     1,  0,  0,  JOF_BYTE) \
     macro(JSOP_UNUSED181,     181,"unused181",  NULL,     1,  0,  0,  JOF_BYTE) \
@@ -1768,9 +1839,24 @@
      *   Stack: obj => obj[name]
      */ \
     macro(JSOP_CALLPROP,      184,"callprop",   NULL,     5,  1,  1, JOF_ATOM|JOF_PROP|JOF_TYPESET) \
-    \
-    macro(JSOP_UNUSED185,     185,"unused185",  NULL,     1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED186,     186,"unused186",  NULL,     1,  0,  0,  JOF_BYTE) \
+    /*
+     * Determines the 'this' value for current function frame and pushes it onto
+     * the stack. Emitted in the prologue of functions with a this-binding.
+     *   Category: Variables and Scopes
+     *   Type: This
+     *   Operands:
+     *   Stack: => this
+     */ \
+    macro(JSOP_FUNCTIONTHIS,  185,"functionthis",NULL,    1,  0,  1,  JOF_BYTE) \
+    /*
+     * Pushes 'this' value for current stack frame onto the stack. Emitted when
+     * 'this' refers to the global 'this'.
+     *   Category: Variables and Scopes
+     *   Type: This
+     *   Operands:
+     *   Stack: => this
+     */ \
+    macro(JSOP_GLOBALTHIS,    186,"globalthis", NULL,     1,  0,  1,  JOF_BYTE) \
     macro(JSOP_UNUSED187,     187,"unused187",  NULL,     1,  0,  0,  JOF_BYTE) \
     \
     /*
@@ -1781,10 +1867,34 @@
      *   Stack: => val
      */ \
     macro(JSOP_UINT24,        188,"uint24",     NULL,     4,  0,  1, JOF_UINT24) \
-    \
-    macro(JSOP_UNUSED189,     189,"unused189",   NULL,    1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED190,     190,"unused190",   NULL,    1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED191,     191,"unused191",   NULL,    1,  0,  0,  JOF_BYTE) \
+    /*
+     * Throw if the value on top of the stack is the TDZ MagicValue. Used in
+     * derived class constructors.
+     *   Category: Variables and Scopes
+     *   Type: This
+     *   Operands:
+     *   Stack: this => this
+     */ \
+    macro(JSOP_CHECKTHIS,     189,"checkthis",   NULL,    1,  1,  1,  JOF_BYTE) \
+    /*
+     * Check if a derived class constructor has a valid return value and 'this'
+     * value before it returns. If the return value is not an object, stores
+     * the 'this' value to the return value slot.
+     *   Category: Variables and Scopes
+     *   Type: This
+     *   Operands:
+     *   Stack: this =>
+     */ \
+    macro(JSOP_CHECKRETURN,   190,"checkreturn", NULL,    1,  1,  0,  JOF_BYTE) \
+    /*
+     * Throw an exception if the value on top of the stack is not the TDZ
+     * MagicValue. Used in derived class constructors.
+     *   Category: Variables and Scopes
+     *   Type: This
+     *   Operands:
+     *   Stack: this => this
+     */ \
+    macro(JSOP_CHECKTHISREINIT,191,"checkthisreinit",NULL,1,  1,  1,  JOF_BYTE) \
     macro(JSOP_UNUSED192,     192,"unused192",   NULL,    1,  0,  0,  JOF_BYTE) \
     \
     /*
@@ -1954,7 +2064,15 @@
     macro(JSOP_UNUSED210,     210, "unused210",    NULL,  1,  0,  0,  JOF_BYTE) \
     macro(JSOP_UNUSED211,     211, "unused211",    NULL,  1,  0,  0,  JOF_BYTE) \
     macro(JSOP_UNUSED212,     212, "unused212",    NULL,  1,  0,  0,  JOF_BYTE) \
-    macro(JSOP_UNUSED213,     213, "unused213",    NULL,  1,  0,  0,  JOF_BYTE) \
+    /*
+     * Pushes the nearest 'var' environment.
+     *
+     *   Category: Variables and Scopes
+     *   Type: Free Variables
+     *   Operands:
+     *   Stack: => scope
+     */ \
+    macro(JSOP_BINDVAR,       213, "bindvar",      NULL,  1,  0,  1,  JOF_BYTE) \
     /*
      * Pushes the global scope onto the stack if the script doesn't have a
      * non-syntactic global scope.  Otherwise will act like JSOP_BINDNAME.
@@ -2023,15 +2141,12 @@
     macro(JSOP_REST,          224, "rest",         NULL,  1,  0,  1,  JOF_BYTE|JOF_TYPESET) \
     \
     /*
-     * First, throw a TypeError if baseValue is null or undefined. Then,
-     * replace the top-of-stack value propertyNameValue with
-     * ToPropertyKey(propertyNameValue). This opcode implements ES6 12.3.2.1
-     * steps 7-10.  It is also used to implement computed property names; in
-     * that case, baseValue is always an object, so the first step is a no-op.
+     * Replace the top-of-stack value propertyNameValue with
+     * ToPropertyKey(propertyNameValue).
      *   Category: Literals
      *   Type: Object
      *   Operands:
-     *   Stack: baseValue, propertyNameValue => baseValue, propertyKey
+     *   Stack: propertyNameValue => propertyKey
      */ \
     macro(JSOP_TOID,          225, "toid",         NULL,  1,  1,  1,  JOF_BYTE) \
     \
@@ -2064,15 +2179,31 @@
      *   Operands:
      *   Stack: val => ToString(val)
      */ \
-    macro(JSOP_TOSTRING,    228, "tostring",       NULL,  1,  1,  1,  JOF_BYTE)
+    macro(JSOP_TOSTRING,    228, "tostring",       NULL,  1,  1,  1,  JOF_BYTE) \
+    /*
+     * No-op used by the decompiler to produce nicer error messages about
+     * destructuring code.
+     *   Category: Other
+     *   Operands:
+     *   Stack: =>
+     */ \
+    macro(JSOP_NOP_DESTRUCTURING, 229, "nop-destructuring", NULL, 1, 0, 0, JOF_BYTE) \
+    /*
+     * This opcode is a no-op and it indicates the location of a jump
+     * instruction target. Some other opcodes act as jump targets, such as
+     * LOOPENTRY, as well as all which are matched by BytecodeIsJumpTarget
+     * function.
+     *   Category: Other
+     *   Operands:
+     *   Stack: =>
+     */ \
+    macro(JSOP_JUMPTARGET,  230, "jumptarget",     NULL,  1,  0,  0,  JOF_BYTE)
 
 /*
  * In certain circumstances it may be useful to "pad out" the opcode space to
  * a power of two.  Use this macro to do so.
  */
 #define FOR_EACH_TRAILING_UNUSED_OPCODE(macro) \
-    macro(229) \
-    macro(230) \
     macro(231) \
     macro(232) \
     macro(233) \

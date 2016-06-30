@@ -6,11 +6,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "ds/TraceableFifo.h"
+#include "gc/Policy.h"
+#include "js/GCHashTable.h"
+#include "js/GCVector.h"
 #include "js/RootingAPI.h"
-#include "js/TraceableHashTable.h"
-#include "js/TraceableVector.h"
 
 #include "jsapi-tests/tests.h"
+
+using namespace js;
 
 BEGIN_TEST(testGCExactRooting)
 {
@@ -41,32 +44,30 @@ BEGIN_TEST(testGCSuppressions)
 }
 END_TEST(testGCSuppressions)
 
-struct MyContainer : public JS::Traceable
+struct MyContainer
 {
-    RelocatablePtrObject obj;
-    RelocatablePtrString str;
+    HeapPtr<JSObject*> obj;
+    HeapPtr<JSString*> str;
 
     MyContainer() : obj(nullptr), str(nullptr) {}
-    static void trace(MyContainer* self, JSTracer* trc) {
-        if (self->obj)
-            js::TraceEdge(trc, &self->obj, "test container");
-        if (self->str)
-            js::TraceEdge(trc, &self->str, "test container");
+    void trace(JSTracer* trc) {
+        js::TraceNullableEdge(trc, &obj, "test container");
+        js::TraceNullableEdge(trc, &str, "test container");
     }
 };
 
 namespace js {
 template <>
 struct RootedBase<MyContainer> {
-    RelocatablePtrObject& obj() { return static_cast<Rooted<MyContainer>*>(this)->get().obj; }
-    RelocatablePtrString& str() { return static_cast<Rooted<MyContainer>*>(this)->get().str; }
+    HeapPtr<JSObject*>& obj() { return static_cast<Rooted<MyContainer>*>(this)->get().obj; }
+    HeapPtr<JSString*>& str() { return static_cast<Rooted<MyContainer>*>(this)->get().str; }
 };
 template <>
 struct PersistentRootedBase<MyContainer> {
-    RelocatablePtrObject& obj() {
+    HeapPtr<JSObject*>& obj() {
         return static_cast<PersistentRooted<MyContainer>*>(this)->get().obj;
     }
-    RelocatablePtrString& str() {
+    HeapPtr<JSString*>& str() {
         return static_cast<PersistentRooted<MyContainer>*>(this)->get().str;
     }
 };
@@ -92,7 +93,7 @@ BEGIN_TEST(testGCRootedStaticStructInternalStackStorageAugmented)
         bool same;
 
         // Automatic move from stack to heap.
-        JS::PersistentRooted<MyContainer> heap(cx, container);
+        JS::PersistentRooted<MyContainer> heap(rt, container);
 
         // clear prior rooting.
         container.obj() = nullptr;
@@ -122,7 +123,36 @@ BEGIN_TEST(testGCRootedStaticStructInternalStackStorageAugmented)
 }
 END_TEST(testGCRootedStaticStructInternalStackStorageAugmented)
 
-using MyHashMap = js::TraceableHashMap<js::Shape*, JSObject*>;
+static JS::PersistentRooted<JSObject*> sLongLived;
+BEGIN_TEST(testGCPersistentRootedOutlivesRuntime)
+{
+    sLongLived.init(rt, JS_NewObject(cx, nullptr));
+    CHECK(sLongLived);
+    return true;
+}
+END_TEST(testGCPersistentRootedOutlivesRuntime)
+
+// Unlike the above, the following test is an example of an invalid usage: for
+// performance and simplicity reasons, PersistentRooted<Traceable> is not
+// allowed to outlive the container it belongs to. The following commented out
+// test can be used to verify that the relevant assertion fires as expected.
+static JS::PersistentRooted<MyContainer> sContainer;
+BEGIN_TEST(testGCPersistentRootedTraceableCannotOutliveRuntime)
+{
+    JS::Rooted<MyContainer> container(cx);
+    container.obj() = JS_NewObject(cx, nullptr);
+    container.str() = JS_NewStringCopyZ(cx, "Hello");
+    sContainer.init(rt, container);
+
+    // Commenting the following line will trigger an assertion that the
+    // PersistentRooted outlives the runtime it is attached to.
+    sContainer.reset();
+
+    return true;
+}
+END_TEST(testGCPersistentRootedTraceableCannotOutliveRuntime)
+
+using MyHashMap = js::GCHashMap<js::Shape*, JSObject*>;
 
 BEGIN_TEST(testGCRootedHashMap)
 {
@@ -201,7 +231,7 @@ BEGIN_TEST(testGCHandleHashMap)
 }
 END_TEST(testGCHandleHashMap)
 
-using ShapeVec = TraceableVector<Shape*>;
+using ShapeVec = GCVector<Shape*>;
 
 BEGIN_TEST(testGCRootedVector)
 {
@@ -247,7 +277,7 @@ BEGIN_TEST(testGCRootedVector)
 }
 
 bool
-receiveConstRefToShapeVector(const JS::Rooted<TraceableVector<Shape*>>& rooted)
+receiveConstRefToShapeVector(const JS::Rooted<GCVector<Shape*>>& rooted)
 {
     // Ensure range enumeration works through the reference.
     for (auto shape : rooted) {
@@ -257,7 +287,7 @@ receiveConstRefToShapeVector(const JS::Rooted<TraceableVector<Shape*>>& rooted)
 }
 
 bool
-receiveHandleToShapeVector(JS::Handle<TraceableVector<Shape*>> handle)
+receiveHandleToShapeVector(JS::Handle<GCVector<Shape*>> handle)
 {
     // Ensure range enumeration works through the handle.
     for (auto shape : handle) {
@@ -267,7 +297,7 @@ receiveHandleToShapeVector(JS::Handle<TraceableVector<Shape*>> handle)
 }
 
 bool
-receiveMutableHandleToShapeVector(JS::MutableHandle<TraceableVector<Shape*>> handle)
+receiveMutableHandleToShapeVector(JS::MutableHandle<GCVector<Shape*>> handle)
 {
     // Ensure range enumeration works through the handle.
     for (auto shape : handle) {
@@ -316,7 +346,7 @@ BEGIN_TEST(testTraceableFifo)
 }
 END_TEST(testTraceableFifo)
 
-using ShapeVec = TraceableVector<Shape*>;
+using ShapeVec = GCVector<Shape*>;
 
 static bool
 FillVector(JSContext* cx, MutableHandle<ShapeVec> shapes)

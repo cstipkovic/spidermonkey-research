@@ -40,7 +40,7 @@ JitRuntime::generateEnterJIT(JSContext* cx, EnterJitType type)
     MOZ_ASSERT(OsrFrameReg == IntArgReg3);
 
 #if defined(_WIN64)
-    const Operand token  = Operand(rbp, 16 + ShadowStackSpace);
+    const Address token  = Address(rbp, 16 + ShadowStackSpace);
     const Operand scopeChain = Operand(rbp, 24 + ShadowStackSpace);
     const Operand numStackValuesAddr = Operand(rbp, 32 + ShadowStackSpace);
     const Operand result = Operand(rbp, 40 + ShadowStackSpace);
@@ -158,10 +158,11 @@ JitRuntime::generateEnterJIT(JSContext* cx, EnterJitType type)
     masm.subq(rsp, r14);
 
     // Create a frame descriptor.
-    masm.makeFrameDescriptor(r14, JitFrame_Entry);
+    masm.makeFrameDescriptor(r14, JitFrame_Entry, JitFrameLayout::Size());
     masm.push(r14);
 
     CodeLabel returnLabel;
+    CodeLabel oomReturnLabel;
     if (type == EnterJitBaseline) {
         // Handle OSR.
         AllocatableGeneralRegisterSet regs(GeneralRegisterSet::All());
@@ -182,7 +183,7 @@ JitRuntime::generateEnterJIT(JSContext* cx, EnterJitType type)
         masm.movq(numStackValuesAddr, numStackValues);
 
         // Push return address
-        masm.mov(returnLabel.dest(), scratch);
+        masm.mov(returnLabel.patchAt(), scratch);
         masm.push(scratch);
 
         // Push previous frame pointer.
@@ -222,7 +223,7 @@ JitRuntime::generateEnterJIT(JSContext* cx, EnterJitType type)
 
         // Enter exit frame.
         masm.addPtr(Imm32(BaselineFrame::Size() + BaselineFrame::FramePointerOffset), valuesSize);
-        masm.makeFrameDescriptor(valuesSize, JitFrame_BaselineJS);
+        masm.makeFrameDescriptor(valuesSize, JitFrame_BaselineJS, ExitFrameLayout::Size());
         masm.push(valuesSize);
         masm.push(Imm32(0)); // Fake return address.
         // No GC things to mark, push a bare token.
@@ -270,7 +271,7 @@ JitRuntime::generateEnterJIT(JSContext* cx, EnterJitType type)
         masm.mov(framePtr, rsp);
         masm.addPtr(Imm32(2 * sizeof(uintptr_t)), rsp);
         masm.moveValue(MagicValue(JS_ION_ERROR), JSReturnOperand);
-        masm.mov(returnLabel.dest(), scratch);
+        masm.mov(oomReturnLabel.patchAt(), scratch);
         masm.jump(scratch);
 
         masm.bind(&notOsr);
@@ -286,8 +287,10 @@ JitRuntime::generateEnterJIT(JSContext* cx, EnterJitType type)
 
     if (type == EnterJitBaseline) {
         // Baseline OSR will return here.
-        masm.bind(returnLabel.src());
+        masm.use(returnLabel.target());
         masm.addCodeLabel(returnLabel);
+        masm.use(oomReturnLabel.target());
+        masm.addCodeLabel(oomReturnLabel);
     }
 
     // Pop arguments and padding from stack.
@@ -513,7 +516,7 @@ JitRuntime::generateArgumentsRectifier(JSContext* cx, void** returnAddrOut)
 
     // Construct descriptor.
     masm.subq(rsp, r9);
-    masm.makeFrameDescriptor(r9, JitFrame_Rectifier);
+    masm.makeFrameDescriptor(r9, JitFrame_Rectifier, JitFrameLayout::Size());
 
     // Construct JitFrameLayout.
     masm.push(rdx); // numActualArgs
@@ -560,11 +563,11 @@ PushBailoutFrame(MacroAssembler& masm, Register spArg)
         // the float registers to have the maximal possible size
         // (Simd128DataSize). To work around this, we just spill the double
         // registers by hand here, using the register dump offset directly.
-        for (GeneralRegisterBackwardIterator iter(AllRegs.gprs()); iter.more(); iter++)
+        for (GeneralRegisterBackwardIterator iter(AllRegs.gprs()); iter.more(); ++iter)
             masm.Push(*iter);
 
         masm.reserveStack(sizeof(RegisterDump::FPUArray));
-        for (FloatRegisterBackwardIterator iter(AllRegs.fpus()); iter.more(); iter++) {
+        for (FloatRegisterBackwardIterator iter(AllRegs.fpus()); iter.more(); ++iter) {
             FloatRegister reg = *iter;
             Address spillAddress(StackPointer, reg.getRegisterDumpOffsetInBytes());
             masm.storeDouble(reg, spillAddress);
@@ -853,6 +856,11 @@ JitCode*
 JitRuntime::generateDebugTrapHandler(JSContext* cx)
 {
     MacroAssembler masm;
+#ifndef JS_USE_LINK_REGISTER
+    // The first value contains the return addres,
+    // which we pull into ICTailCallReg for tail calls.
+    masm.setFramePushed(sizeof(intptr_t));
+#endif
 
     Register scratch1 = rax;
     Register scratch2 = rcx;

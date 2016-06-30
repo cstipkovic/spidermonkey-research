@@ -7,7 +7,8 @@
 #ifndef js_UbiNodePostOrder_h
 #define js_UbiNodePostOrder_h
 
-#include "mozilla/DebugOnly.h"
+#include "mozilla/Attributes.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/Move.h"
 
 #include "jsalloc.h"
@@ -19,32 +20,43 @@
 namespace JS {
 namespace ubi {
 
-// A post-order depth-first traversal of `ubi::Node` graphs.
-//
-// NB: This traversal visits each node reachable from the start set exactly
-// once, and does not visit edges at all. Therefore, this traversal would be a
-// very poor choice for recording multiple paths to the same node, for example.
-// If your analysis needs to consider edges, use `JS::ubi::BreadthFirst`
-// instead.
-//
-// No GC may occur while an instance of `PostOrder` is live.
-//
-// The `Visitor` type provided to `PostOrder::traverse` must have the following
-// member:
-//
-//   bool operator()(Node& node)
-//
-//     The visitor method. This method is called once for each `node` reachable
-//     from the start set in post-order.
-//
-//     The visitor function should return true on success, or false if an error
-//     occurs. A false return value terminates the traversal immediately, and
-//     causes `PostOrder::traverse` to return false.
+/**
+ * A post-order depth-first traversal of `ubi::Node` graphs.
+ *
+ * No GC may occur while an instance of `PostOrder` is live.
+ *
+ * The `NodeVisitor` type provided to `PostOrder::traverse` must have the
+ * following member:
+ *
+ *   bool operator()(Node& node)
+ *
+ *     The node visitor method. This method is called once for each `node`
+ *     reachable from the start set in post-order.
+ *
+ *     This visitor function should return true on success, or false if an error
+ *     occurs. A false return value terminates the traversal immediately, and
+ *     causes `PostOrder::traverse` to return false.
+ *
+ * The `EdgeVisitor` type provided to `PostOrder::traverse` must have the
+ * following member:
+ *
+ *   bool operator()(Node& origin, Edge& edge)
+ *
+ *     The edge visitor method. This method is called once for each outgoing
+ *     `edge` from `origin` that is reachable from the start set.
+ *
+ *     NB: UNLIKE NODES, THERE IS NO GUARANTEED ORDER IN WHICH EDGES AND THEIR
+ *     ORIGINS ARE VISITED!
+ *
+ *     This visitor function should return true on success, or false if an error
+ *     occurs. A false return value terminates the traversal immediately, and
+ *     causes `PostOrder::traverse` to return false.
+ */
 struct PostOrder {
   private:
     struct OriginAndEdges {
-        Node       origin;
-        EdgeVector edges;
+        Node                 origin;
+        EdgeVector           edges;
 
         OriginAndEdges(const Node& node, EdgeVector&& edges)
           : origin(node)
@@ -74,10 +86,12 @@ struct PostOrder {
     JSRuntime*               rt;
     Set                      seen;
     Stack                    stack;
-    mozilla::DebugOnly<bool> traversed;
+#ifdef DEBUG
+    bool                     traversed;
+#endif
 
   private:
-    bool fillEdgesFromRange(EdgeVector& edges, UniquePtr<EdgeRange>& range) {
+    MOZ_MUST_USE bool fillEdgesFromRange(EdgeVector& edges, js::UniquePtr<EdgeRange>& range) {
         MOZ_ASSERT(range);
         for ( ; !range->empty(); range->popFront()) {
             if (!edges.append(mozilla::Move(range->front())))
@@ -86,7 +100,7 @@ struct PostOrder {
         return true;
     }
 
-    bool pushForTraversing(const Node& node) {
+    MOZ_MUST_USE bool pushForTraversing(const Node& node) {
         EdgeVector edges;
         auto range = node.edges(rt, /* wantNames */ false);
         return range &&
@@ -105,38 +119,44 @@ struct PostOrder {
       : rt(rt)
       , seen()
       , stack()
+#ifdef DEBUG
       , traversed(false)
+#endif
     { }
 
     // Initialize this traversal object. Return false on OOM.
-    bool init() { return seen.init(); }
+    MOZ_MUST_USE bool init() { return seen.init(); }
 
     // Add `node` as a starting point for the traversal. You may add
     // as many starting points as you like. Returns false on OOM.
-    bool addStart(const Node& node) {
+    MOZ_MUST_USE bool addStart(const Node& node) {
         if (!seen.put(node))
             return false;
         return pushForTraversing(node);
     }
 
     // Traverse the graph in post-order, starting with the set of nodes passed
-    // to `addStart` and applying `visitor::operator()` for each node in
-    // the graph, as described above.
+    // to `addStart` and applying `onNode::operator()` for each node in the
+    // graph and `onEdge::operator()` for each edge in the graph, as described
+    // above.
     //
     // This should be called only once per instance of this class.
     //
-    // Return false on OOM or error return from `visitor::operator()`.
-    template<typename Visitor>
-    bool traverse(Visitor visitor) {
+    // Return false on OOM or error return from `onNode::operator()` or
+    // `onEdge::operator()`.
+    template<typename NodeVisitor, typename EdgeVisitor>
+    MOZ_MUST_USE bool traverse(NodeVisitor onNode, EdgeVisitor onEdge) {
+#ifdef DEBUG
         MOZ_ASSERT(!traversed, "Can only traverse() once!");
         traversed = true;
+#endif
 
         while (!stack.empty()) {
             auto& origin = stack.back().origin;
             auto& edges = stack.back().edges;
 
             if (edges.empty()) {
-                if (!visitor(origin))
+                if (!onNode(origin))
                     return false;
                 stack.popBack();
                 continue;
@@ -145,14 +165,20 @@ struct PostOrder {
             Edge edge = mozilla::Move(edges.back());
             edges.popBack();
 
+            if (!onEdge(origin, edge))
+                return false;
+
             auto ptr = seen.lookupForAdd(edge.referent);
             // We've already seen this node, don't follow its edges.
             if (ptr)
                 continue;
 
             // Mark the referent as seen and follow its edges.
-            if (!seen.add(ptr, edge.referent) || !pushForTraversing(edge.referent))
+            if (!seen.add(ptr, edge.referent) ||
+                !pushForTraversing(edge.referent))
+            {
                 return false;
+            }
         }
 
         return true;

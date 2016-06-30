@@ -19,12 +19,20 @@
 namespace js {
 
 inline SharedMem<uint8_t*>
-ArrayBufferObjectMaybeShared::dataPointerMaybeShared()
+ArrayBufferObjectMaybeShared::dataPointerEither()
 {
     ArrayBufferObjectMaybeShared* buf = this;
     if (buf->is<ArrayBufferObject>())
         return buf->as<ArrayBufferObject>().dataPointerShared();
     return buf->as<SharedArrayBufferObject>().dataPointerShared();
+}
+
+inline bool
+ArrayBufferObjectMaybeShared::isDetached() const
+{
+    if (this->is<ArrayBufferObject>())
+        return this->as<ArrayBufferObject>().isDetached();
+    return false;
 }
 
 inline uint32_t

@@ -10,6 +10,7 @@
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/ModuleLoader.h"
+#include "nsAutoPtr.h"
 #include "nsISupports.h"
 #include "nsIObserver.h"
 #include "nsIURI.h"
@@ -148,7 +149,6 @@ class mozJSComponentLoader : public mozilla::ModuleLoader,
                                                 mozilla::MallocSizeOf aMallocSizeOf, void* arg);
 
     // Modules are intentionally leaked, but still cleared.
-    static PLDHashOperator ClearModules(const nsACString& key, ModuleEntry*& entry, void* cx);
     nsDataHashtable<nsCStringHashKey, ModuleEntry*> mModules;
 
     nsClassHashtable<nsCStringHashKey, ModuleEntry> mImports;

@@ -9,32 +9,19 @@
 #include "jscompartment.h"
 #include "jsobj.h"
 
+#include "asmjs/WasmJS.h"
+#include "builtin/TypedObject.h"
+#include "gc/Policy.h"
 #include "gc/Zone.h"
 #include "js/HashTable.h"
 #include "js/Value.h"
 #include "vm/ScopeObject.h"
 #include "vm/SharedArrayObject.h"
-#include "vm/SharedTypedArrayObject.h"
 #include "vm/Symbol.h"
 
 namespace js {
 
 #ifdef DEBUG
-
-template <typename T>
-void
-BarrieredBase<T>::assertTypeConstraints() const
-{
-    static_assert(mozilla::IsBaseOf<gc::Cell, typename mozilla::RemovePointer<T>::Type>::value ||
-                  mozilla::IsSame<JS::Value, T>::value ||
-                  mozilla::IsSame<jsid, T>::value ||
-                  mozilla::IsSame<TaggedProto, T>::value,
-                  "ensure only supported types are instantiated with barriers");
-}
-#define INSTANTIATE_ALL_VALID_TYPES(type) \
-    template void BarrieredBase<type>::assertTypeConstraints() const;
-FOR_EACH_GC_POINTER_TYPE(INSTANTIATE_ALL_VALID_TYPES)
-#undef INSTANTIATE_ALL_VALID_TYPES
 
 bool
 HeapSlot::preconditionForSet(NativeObject* owner, Kind kind, uint32_t slot)
@@ -91,22 +78,31 @@ template <typename T>
 void
 ReadBarrierFunctor<S>::operator()(T* t)
 {
-    InternalGCMethods<T*>::readBarrier(t);
+    InternalBarrierMethods<T*>::readBarrier(t);
 }
-template void ReadBarrierFunctor<JS::Value>::operator()<JS::Symbol>(JS::Symbol*);
-template void ReadBarrierFunctor<JS::Value>::operator()<JSObject>(JSObject*);
-template void ReadBarrierFunctor<JS::Value>::operator()<JSString>(JSString*);
+
+// All GC things may be held in a Value, either publicly or as a private GC
+// thing.
+#define JS_EXPAND_DEF(name, type, _) \
+template void ReadBarrierFunctor<JS::Value>::operator()<type>(type*);
+JS_FOR_EACH_TRACEKIND(JS_EXPAND_DEF);
+#undef JS_EXPAND_DEF
 
 template <typename S>
 template <typename T>
 void
 PreBarrierFunctor<S>::operator()(T* t)
 {
-    InternalGCMethods<T*>::preBarrier(t);
+    InternalBarrierMethods<T*>::preBarrier(t);
 }
-template void PreBarrierFunctor<JS::Value>::operator()<JS::Symbol>(JS::Symbol*);
-template void PreBarrierFunctor<JS::Value>::operator()<JSObject>(JSObject*);
-template void PreBarrierFunctor<JS::Value>::operator()<JSString>(JSString*);
+
+// All GC things may be held in a Value, either publicly or as a private GC
+// thing.
+#define JS_EXPAND_DEF(name, type, _) \
+template void PreBarrierFunctor<JS::Value>::operator()<type>(type*);
+JS_FOR_EACH_TRACEKIND(JS_EXPAND_DEF);
+#undef JS_EXPAND_DEF
+
 template void PreBarrierFunctor<jsid>::operator()<JS::Symbol>(JS::Symbol*);
 template void PreBarrierFunctor<jsid>::operator()<JSString>(JSString*);
 
@@ -124,11 +120,7 @@ MovableCellHasher<T>::hash(const Lookup& l)
     MOZ_ASSERT(CurrentThreadCanAccessZone(l->zoneFromAnyThread()) ||
                l->zoneFromAnyThread()->isSelfHostingZone());
 
-    HashNumber hn;
-    AutoEnterOOMUnsafeRegion oomUnsafe;
-    if (!l->zoneFromAnyThread()->getHashCode(l, &hn))
-        oomUnsafe.crash("failed to get a stable hash code");
-    return hn;
+    return l->zoneFromAnyThread()->getHashCodeInfallible(l);
 }
 
 template <typename T>
@@ -153,16 +145,15 @@ MovableCellHasher<T>::match(const Key& k, const Lookup& l)
     MOZ_ASSERT(zone->hasUniqueId(l));
 
     // Since both already have a uid (from hash), the get is infallible.
-    uint64_t uidK, uidL;
-    MOZ_ALWAYS_TRUE(zone->getUniqueId(k, &uidK));
-    MOZ_ALWAYS_TRUE(zone->getUniqueId(l, &uidL));
-    return uidK == uidL;
+    return zone->getUniqueIdInfallible(k) == zone->getUniqueIdInfallible(l);
 }
 
 template struct MovableCellHasher<JSObject*>;
 template struct MovableCellHasher<GlobalObject*>;
 template struct MovableCellHasher<SavedFrame*>;
 template struct MovableCellHasher<ScopeObject*>;
+template struct MovableCellHasher<WasmInstanceObject*>;
+template struct MovableCellHasher<JSScript*>;
 
 } // namespace js
 
@@ -170,12 +161,12 @@ JS_PUBLIC_API(void)
 JS::HeapObjectPostBarrier(JSObject** objp, JSObject* prev, JSObject* next)
 {
     MOZ_ASSERT(objp);
-    js::InternalGCMethods<JSObject*>::postBarrier(objp, prev, next);
+    js::InternalBarrierMethods<JSObject*>::postBarrier(objp, prev, next);
 }
 
 JS_PUBLIC_API(void)
 JS::HeapValuePostBarrier(JS::Value* valuep, const Value& prev, const Value& next)
 {
     MOZ_ASSERT(valuep);
-    js::InternalGCMethods<JS::Value>::postBarrier(valuep, prev, next);
+    js::InternalBarrierMethods<JS::Value>::postBarrier(valuep, prev, next);
 }

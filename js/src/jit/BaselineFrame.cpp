@@ -32,10 +32,10 @@ BaselineFrame::trace(JSTracer* trc, JitFrameIterator& frameIterator)
 {
     replaceCalleeToken(MarkCalleeToken(trc, calleeToken()));
 
-    TraceRoot(trc, &thisValue(), "baseline-this");
+    // Mark |this|, actual and formal args.
+    if (isFunctionFrame()) {
+        TraceRoot(trc, &thisArgument(), "baseline-this");
 
-    // Mark actual and formal args.
-    if (isNonEvalFunctionFrame()) {
         unsigned numArgs = js::Max(numActualArgs(), numFormalArgs());
         TraceRootRange(trc, numArgs + isConstructing(), argv(), "baseline-args");
     }
@@ -48,11 +48,8 @@ BaselineFrame::trace(JSTracer* trc, JitFrameIterator& frameIterator)
     if (hasReturnValue())
         TraceRoot(trc, returnValue().address(), "baseline-rval");
 
-    if (isEvalFrame()) {
-        TraceRoot(trc, &evalScript_, "baseline-evalscript");
-        if (isFunctionFrame())
-            TraceRoot(trc, evalNewTargetAddress(), "baseline-evalNewTarget");
-    }
+    if (isEvalFrame() && script()->isDirectEvalInFunction())
+        TraceRoot(trc, evalNewTargetAddress(), "baseline-evalNewTarget");
 
     if (hasArgsObj())
         TraceRoot(trc, &argsObj_, "baseline-args-obj");
@@ -91,21 +88,21 @@ bool
 BaselineFrame::isNonGlobalEvalFrame() const
 {
     return isEvalFrame() &&
-           script()->enclosingStaticScope()->as<StaticEvalObject>().isNonGlobal();
+           script()->enclosingStaticScope()->as<StaticEvalScope>().isNonGlobal();
 }
 
 bool
-BaselineFrame::copyRawFrameSlots(AutoValueVector* vec) const
+BaselineFrame::copyRawFrameSlots(MutableHandle<GCVector<Value>> vec) const
 {
     unsigned nfixed = script()->nfixed();
     unsigned nformals = numFormalArgs();
 
-    if (!vec->resize(nformals + nfixed))
+    if (!vec.resize(nformals + nfixed))
         return false;
 
-    mozilla::PodCopy(vec->begin(), argv(), nformals);
+    mozilla::PodCopy(vec.begin(), argv(), nformals);
     for (unsigned i = 0; i < nfixed; i++)
-        (*vec)[nformals + i].set(*valueSlot(i));
+        vec[nformals + i].set(*valueSlot(i));
     return true;
 }
 
@@ -126,8 +123,8 @@ BaselineFrame::initStrictEvalScopeObjects(JSContext* cx)
 bool
 BaselineFrame::initFunctionScopeObjects(JSContext* cx)
 {
-    MOZ_ASSERT(isNonEvalFunctionFrame());
-    MOZ_ASSERT(fun()->needsCallObject());
+    MOZ_ASSERT(isFunctionFrame());
+    MOZ_ASSERT(callee()->needsCallObject());
 
     CallObject* callobj = CallObject::createForFunction(cx, this);
     if (!callobj)
@@ -147,11 +144,6 @@ BaselineFrame::initForOsr(InterpreterFrame* fp, uint32_t numStackValues)
 
     if (fp->hasCallObjUnchecked())
         flags_ |= BaselineFrame::HAS_CALL_OBJ;
-
-    if (fp->isEvalFrame()) {
-        flags_ |= BaselineFrame::EVAL;
-        evalScript_ = fp->script();
-    }
 
     if (fp->script()->needsArgsObj() && fp->hasArgsObj()) {
         flags_ |= BaselineFrame::HAS_ARGS_OBJ;

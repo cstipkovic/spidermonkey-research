@@ -19,44 +19,49 @@ class LazyScript;
 class LifoAlloc;
 class ModuleObject;
 class ScriptSourceObject;
-class ScopeObject;
+class StaticScope;
 struct SourceCompressionTask;
 
 namespace frontend {
 
 JSScript*
 CompileScript(ExclusiveContext* cx, LifoAlloc* alloc,
-              HandleObject scopeChain, Handle<ScopeObject*> enclosingStaticScope,
+              HandleObject scopeChain, Handle<StaticScope*> enclosingStaticScope,
               HandleScript evalCaller, const ReadOnlyCompileOptions& options,
               SourceBufferHolder& srcBuf, JSString* source_ = nullptr,
               SourceCompressionTask* extraSct = nullptr,
               ScriptSourceObject** sourceObjectOut = nullptr);
 
-ModuleObject *
-CompileModule(JSContext *cx, HandleObject obj, const ReadOnlyCompileOptions &options,
-              SourceBufferHolder &srcBuf);
+ModuleObject*
+CompileModule(JSContext* cx, const ReadOnlyCompileOptions& options,
+              SourceBufferHolder& srcBuf);
 
-bool
+ModuleObject*
+CompileModule(ExclusiveContext* cx, const ReadOnlyCompileOptions& options,
+              SourceBufferHolder& srcBuf, LifoAlloc* alloc,
+              ScriptSourceObject** sourceObjectOut = nullptr);
+
+MOZ_MUST_USE bool
 CompileLazyFunction(JSContext* cx, Handle<LazyScript*> lazy, const char16_t* chars, size_t length);
 
 /*
- * enclosingStaticScope is a static enclosing scope (e.g. a StaticWithObject).
+ * enclosingStaticScope is a static enclosing scope (e.g. a StaticWithScope).
  * Must be null if the enclosing scope is a global.
  */
-bool
+MOZ_MUST_USE bool
 CompileFunctionBody(JSContext* cx, MutableHandleFunction fun,
                     const ReadOnlyCompileOptions& options,
                     Handle<PropertyNameVector> formals, JS::SourceBufferHolder& srcBuf,
-                    Handle<ScopeObject*> enclosingStaticScope);
+                    Handle<StaticScope*> enclosingStaticScope);
 
 // As above, but defaults to the global lexical scope as the enclosing static
 // scope.
-bool
+MOZ_MUST_USE bool
 CompileFunctionBody(JSContext* cx, MutableHandleFunction fun,
                     const ReadOnlyCompileOptions& options,
                     Handle<PropertyNameVector> formals, JS::SourceBufferHolder& srcBuf);
 
-bool
+MOZ_MUST_USE bool
 CompileStarGeneratorBody(JSContext* cx, MutableHandleFunction fun,
                          const ReadOnlyCompileOptions& options,
                          Handle<PropertyNameVector> formals, JS::SourceBufferHolder& srcBuf);

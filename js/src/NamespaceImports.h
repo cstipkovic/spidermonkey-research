@@ -13,7 +13,8 @@
 // These includes are needed these for some typedefs (e.g. HandleValue) and
 // functions (e.g. NullValue())...
 #include "js/CallNonGenericMethod.h"
-#include "js/TraceableVector.h"
+#include "js/GCHashTable.h"
+#include "js/GCVector.h"
 #include "js/TypeDecls.h"
 #include "js/Value.h"
 
@@ -36,9 +37,9 @@ typedef AutoVectorRooter<jsid> AutoIdVector;
 typedef AutoVectorRooter<JSObject*> AutoObjectVector;
 typedef AutoVectorRooter<JSScript*> AutoVector;
 
-using ValueVector = js::TraceableVector<JS::Value>;
-using IdVector = js::TraceableVector<jsid>;
-using ScriptVector = js::TraceableVector<JSScript*>;
+using ValueVector = JS::GCVector<JS::Value>;
+using IdVector = JS::GCVector<jsid>;
+using ScriptVector = JS::GCVector<JSScript*>;
 
 template <typename T> class AutoVectorRooter;
 template<typename K, typename V> class AutoHashMapRooter;
@@ -49,6 +50,8 @@ class MOZ_STACK_CLASS SourceBufferHolder;
 class HandleValueArray;
 
 class ObjectOpResult;
+
+struct PropertyDescriptor;
 } // namespace JS
 
 // Do the importing.
@@ -77,6 +80,8 @@ using JS::TwoByteChars;
 using JS::TwoByteCharsZ;
 using JS::UTF8Chars;
 using JS::UTF8CharsZ;
+using JS::UniqueChars;
+using JS::UniqueTwoByteChars;
 
 using JS::AutoVectorRooter;
 typedef AutoVectorRooter<Value> AutoValueVector;
@@ -90,9 +95,12 @@ using JS::ScriptVector;
 using JS::AutoHashMapRooter;
 using JS::AutoHashSetRooter;
 
+using JS::GCVector;
+using JS::GCHashMap;
+using JS::GCHashSet;
+
 using JS::CallArgs;
 using JS::CallNonGenericMethod;
-using JS::CallReceiver;
 using JS::CompileOptions;
 using JS::IsAcceptableThis;
 using JS::NativeImpl;
@@ -145,6 +153,8 @@ using JS::FalseHandleValue;
 using JS::HandleValueArray;
 
 using JS::ObjectOpResult;
+
+using JS::PropertyDescriptor;
 
 using JS::Zone;
 

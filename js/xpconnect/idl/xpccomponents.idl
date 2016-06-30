@@ -123,7 +123,7 @@ interface ScheduledGCCallback : nsISupports
 /**
 * interface of Components.utils
 */
-[scriptable, uuid(eaeab2c0-ada3-4c22-b36d-70320dd923ba)]
+[scriptable, uuid(86003fe3-ee9a-4620-91dc-eef8b1e58815)]
 interface nsIXPCComponents_Utils : nsISupports
 {
 
@@ -344,21 +344,6 @@ interface nsIXPCComponents_Utils : nsISupports
      */
     void unlinkGhostWindows();
 
-    /**
-     * Return the keys in a weak map.  This operation is
-     * non-deterministic because it is affected by the scheduling of the
-     * garbage collector and the cycle collector.
-     *
-     * This should only be used to write tests of the interaction of
-     * the GC and CC with weak maps.
-     *
-     * @param aMap weak map or other JavaScript value
-     * @returns If aMap is a weak map object, return the keys of the weak
-                map as an array.  Otherwise, return undefined.
-     */
-    [implicit_jscontext]
-    jsval nondeterministicGetWeakMapKeys(in jsval aMap);
-
     [implicit_jscontext]
     jsval getJSTestingFunctions();
 
@@ -458,6 +443,15 @@ interface nsIXPCComponents_Utils : nsISupports
      * with this function, getCrossProcessWrapperTag.
      */
     ACString getCrossProcessWrapperTag(in jsval obj);
+
+    /**
+     * If CPOWs are disabled for browser code via the
+     * dom.ipc.cpows.forbid-unsafe-from-browser preferences, then only
+     * add-ons can use CPOWs. This function allows a non-addon scope
+     * to opt into CPOWs. It's necessary for the implementation of
+     * RemoteAddonsParent.jsm.
+     */
+    void permitCPOWsInScope(in jsval obj);
 
     /*
      * To be called from JS only. This is for Gecko internal use only, and may
@@ -716,6 +710,7 @@ interface nsIXPCComponents : nsIXPCComponentsBase
 {
     readonly attribute nsIXPCComponents_Classes         classes;
     readonly attribute nsIXPCComponents_ClassesByID     classesByID;
+    // Will return null if there is no JS stack right now.
     readonly attribute nsIStackFrame                    stack;
     readonly attribute nsIComponentManager              manager;
     readonly attribute nsIXPCComponents_Utils           utils;
@@ -724,8 +719,6 @@ interface nsIXPCComponents : nsIXPCComponentsBase
     readonly attribute nsIXPCComponents_Exception       Exception;
     readonly attribute nsIXPCComponents_Constructor     Constructor;
 
-    [implicit_jscontext]
-    readonly attribute jsval                            lastResult;
     [implicit_jscontext]
     // A javascript component can set |returnCode| to specify an nsresult to
     // be returned without throwing an exception.

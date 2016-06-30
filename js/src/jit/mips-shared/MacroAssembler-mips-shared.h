@@ -9,7 +9,11 @@
 
 #if defined(JS_CODEGEN_MIPS32)
 # include "jit/mips32/Assembler-mips32.h"
+#elif defined(JS_CODEGEN_MIPS64)
+# include "jit/mips64/Assembler-mips64.h"
 #endif
+
+#include "jit/AtomicOp.h"
 
 namespace js {
 namespace jit {
@@ -95,6 +99,8 @@ class MacroAssemblerMIPSShared : public Assembler
     void ma_xor(Register rd, Imm32 imm);
     void ma_xor(Register rd, Register rs, Imm32 imm);
 
+    void ma_ctz(Register rd, Register rs);
+
     // load
     void ma_load(Register dest, const BaseIndex& src, LoadStoreSize size = SizeWord,
                  LoadStoreExtension extension = SignExtend);
@@ -113,10 +119,12 @@ class MacroAssemblerMIPSShared : public Assembler
 
     // subtract
     void ma_subu(Register rd, Register rs, Imm32 imm);
+    void ma_subu(Register rd, Register rs);
     void ma_subu(Register rd, Imm32 imm);
     void ma_subTestOverflow(Register rd, Register rs, Imm32 imm, Label* overflow);
 
     // multiplies.  For now, there are only few that we care about.
+    void ma_mul(Register rd, Register rs, Imm32 imm);
     void ma_mult(Register rs, Imm32 imm);
     void ma_mul_branch_overflow(Register rd, Register rs, Register rt, Label* overflow);
     void ma_mul_branch_overflow(Register rd, Register rs, Imm32 imm, Label* overflow);
@@ -139,8 +147,12 @@ class MacroAssemblerMIPSShared : public Assembler
         ma_li(ScratchRegister, imm);
         ma_b(lhs, ScratchRegister, l, c, jumpKind);
     }
+    template <typename T>
+    void ma_b(Register lhs, T rhs, wasm::JumpTarget target, Condition c,
+              JumpKind jumpKind = LongJump);
 
     void ma_b(Label* l, JumpKind jumpKind = LongJump);
+    void ma_b(wasm::JumpTarget target, JumpKind jumpKind = LongJump);
 
     // fp instructions
     void ma_lis(FloatRegister dest, float value);

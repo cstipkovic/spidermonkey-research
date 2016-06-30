@@ -19,7 +19,6 @@ JITFLAGS = {
         ['--ion-eager', '--ion-offthread-compile=off', '--non-writable-jitcode',
          '--ion-check-range-analysis', '--ion-extra-checks', '--no-sse3', '--no-threads'],
         ['--baseline-eager'],
-        ['--baseline-eager', '--no-fpu'],
         ['--no-baseline', '--no-ion'],
     ],
     # used by jit_test.py
@@ -133,6 +132,9 @@ class RefTest(object):
         self.path = path     # str:  path of JS file relative to tests root dir
         self.options = []    # [str]: Extra options to pass to the shell
         self.jitflags = []   # [str]: JIT flags to pass to the shell
+        self.test_reflect_stringify = None  # str or None: path to
+                                            # reflect-stringify.js file to test
+                                            # instead of actually running tests
 
     @staticmethod
     def prefix_command(path):
@@ -147,7 +149,11 @@ class RefTest(object):
     def get_command(self, prefix):
         dirname, filename = os.path.split(self.path)
         cmd = prefix + self.jitflags + self.options \
-              + RefTest.prefix_command(dirname) + ['-f', self.path]
+              + RefTest.prefix_command(dirname)
+        if self.test_reflect_stringify is not None:
+            cmd += [self.test_reflect_stringify, "--check", self.path]
+        else:
+            cmd += ["-f", self.path]
         return cmd
 
 

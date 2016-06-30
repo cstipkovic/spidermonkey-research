@@ -7,6 +7,7 @@
 #ifndef gc_Rooting_h
 #define gc_Rooting_h
 
+#include "js/GCVector.h"
 #include "js/RootingAPI.h"
 
 class JSAtom;
@@ -54,6 +55,11 @@ typedef JS::Rooted<GlobalObject*>      RootedGlobalObject;
 typedef JS::Rooted<PlainObject*>       RootedPlainObject;
 typedef JS::Rooted<SavedFrame*>        RootedSavedFrame;
 typedef JS::Rooted<ScriptSourceObject*> RootedScriptSource;
+
+typedef JS::GCVector<JSFunction*>   FunctionVector;
+typedef JS::GCVector<PropertyName*> PropertyNameVector;
+typedef JS::GCVector<Shape*>        ShapeVector;
+typedef JS::GCVector<JSString*>     StringVector;
 
 } /* namespace js */
 

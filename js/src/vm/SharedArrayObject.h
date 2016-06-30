@@ -44,7 +44,7 @@ class FutexWaiter;
 class SharedArrayRawBuffer
 {
   private:
-    mozilla::Atomic<uint32_t, mozilla::ReleaseAcquire> refcount;
+    mozilla::Atomic<uint32_t, mozilla::ReleaseAcquire> refcount_;
     uint32_t length;
 
     // A list of structures representing tasks waiting on some
@@ -53,7 +53,7 @@ class SharedArrayRawBuffer
 
   protected:
     SharedArrayRawBuffer(uint8_t* buffer, uint32_t length)
-      : refcount(1),
+      : refcount_(1),
         length(length),
         waiters_(nullptr)
     {
@@ -84,6 +84,8 @@ class SharedArrayRawBuffer
         return length;
     }
 
+    uint32_t refcount() const { return refcount_; }
+
     void addReference();
     void dropReference();
 };
@@ -91,7 +93,7 @@ class SharedArrayRawBuffer
 /*
  * SharedArrayBufferObject
  *
- * When transferred to a WebWorker, the buffer is not neutered on the
+ * When transferred to a WebWorker, the buffer is not detached on the
  * parent side, and both child and parent reference the same buffer.
  *
  * The underlying memory is memory-mapped and reference counted
@@ -103,9 +105,9 @@ class SharedArrayRawBuffer
  * SharedArrayBufferObject (or really the underlying memory) /is
  * racy/: more than one worker can access the memory at the same time.
  *
- * A SharedTypedArrayObject (a view) references a SharedArrayBuffer
+ * A TypedArrayObject (a view) references a SharedArrayBuffer
  * and keeps it alive.  The SharedArrayBuffer does /not/ reference its
- * views, nor do the views reference each other in any way.
+ * views.
  */
 class SharedArrayBufferObject : public ArrayBufferObjectMaybeShared
 {
@@ -121,19 +123,20 @@ class SharedArrayBufferObject : public ArrayBufferObjectMaybeShared
     static const Class class_;
     static const Class protoClass;
     static const JSFunctionSpec jsfuncs[];
-    static const JSFunctionSpec jsstaticfuncs[];
 
     static bool byteLengthGetter(JSContext* cx, unsigned argc, Value* vp);
-
-    static bool fun_isView(JSContext* cx, unsigned argc, Value* vp);
 
     static bool class_constructor(JSContext* cx, unsigned argc, Value* vp);
 
     // Create a SharedArrayBufferObject with a new SharedArrayRawBuffer.
-    static SharedArrayBufferObject* New(JSContext* cx, uint32_t length);
+    static SharedArrayBufferObject* New(JSContext* cx,
+                                        uint32_t length,
+                                        HandleObject proto = nullptr);
 
     // Create a SharedArrayBufferObject using an existing SharedArrayRawBuffer.
-    static SharedArrayBufferObject* New(JSContext* cx, SharedArrayRawBuffer* buffer);
+    static SharedArrayBufferObject* New(JSContext* cx,
+                                        SharedArrayRawBuffer* buffer,
+                                        HandleObject proto = nullptr);
 
     static void Finalize(FreeOp* fop, JSObject* obj);
 
@@ -166,6 +169,7 @@ private:
 
 bool IsSharedArrayBuffer(HandleValue v);
 bool IsSharedArrayBuffer(HandleObject o);
+bool IsSharedArrayBuffer(JSObject* o);
 
 SharedArrayBufferObject& AsSharedArrayBuffer(HandleObject o);
 

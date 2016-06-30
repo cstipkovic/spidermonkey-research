@@ -49,6 +49,7 @@ class JitContext
     JitContext(ExclusiveContext* cx, TempAllocator* temp);
     JitContext(CompileRuntime* rt, CompileCompartment* comp, TempAllocator* temp);
     explicit JitContext(CompileRuntime* rt);
+    JitContext(CompileRuntime* rt, TempAllocator* temp);
     ~JitContext();
 
     // Running context when executing on the main thread. Not available during
@@ -72,7 +73,7 @@ class JitContext
 };
 
 // Initialize Ion statically for all JSRuntimes.
-bool InitializeIon();
+MOZ_MUST_USE bool InitializeIon();
 
 // Get and set the current JIT context.
 JitContext* GetJitContext();
@@ -82,10 +83,9 @@ void SetJitContext(JitContext* ctx);
 
 bool CanIonCompileScript(JSContext* cx, JSScript* script, bool osr);
 
-MethodStatus CanEnterAtBranch(JSContext* cx, HandleScript script,
-                              BaselineFrame* frame, jsbytecode* pc);
+MOZ_MUST_USE bool IonCompileScriptForBaseline(JSContext* cx, BaselineFrame* frame, jsbytecode* pc);
+
 MethodStatus CanEnter(JSContext* cx, RunState& state);
-MethodStatus CompileFunctionForBaseline(JSContext* cx, HandleScript script, BaselineFrame* frame);
 MethodStatus CanEnterUsingFastInvoke(JSContext* cx, HandleScript script, uint32_t numActualArgs);
 
 MethodStatus
@@ -114,7 +114,8 @@ IsErrorStatus(JitExecStatus status)
 
 struct EnterJitData;
 
-bool SetEnterJitData(JSContext* cx, EnterJitData& data, RunState& state, AutoValueVector& vals);
+MOZ_MUST_USE bool SetEnterJitData(JSContext* cx, EnterJitData& data, RunState& state,
+                                  MutableHandle<GCVector<Value>> vals);
 
 JitExecStatus IonCannon(JSContext* cx, RunState& state);
 
@@ -127,7 +128,7 @@ void Invalidate(TypeZone& types, FreeOp* fop,
                 bool cancelOffThread = true);
 void Invalidate(JSContext* cx, const RecompileInfoVector& invalid, bool resetUses = true,
                 bool cancelOffThread = true);
-bool Invalidate(JSContext* cx, JSScript* script, bool resetUses = true,
+void Invalidate(JSContext* cx, JSScript* script, bool resetUses = true,
                 bool cancelOffThread = true);
 
 void ToggleBarriers(JS::Zone* zone, bool needs);
@@ -137,13 +138,13 @@ class MIRGenerator;
 class LIRGraph;
 class CodeGenerator;
 
-bool OptimizeMIR(MIRGenerator* mir);
+MOZ_MUST_USE bool OptimizeMIR(MIRGenerator* mir);
 LIRGraph* GenerateLIR(MIRGenerator* mir);
 CodeGenerator* GenerateCode(MIRGenerator* mir, LIRGraph* lir);
 CodeGenerator* CompileBackEnd(MIRGenerator* mir);
 
 void AttachFinishedCompilations(JSContext* cx);
-void FinishOffThreadBuilder(JSContext* cx, IonBuilder* builder);
+void FinishOffThreadBuilder(JSRuntime* runtime, IonBuilder* builder);
 void StopAllOffThreadCompilations(Zone* zone);
 void StopAllOffThreadCompilations(JSCompartment* comp);
 
@@ -174,7 +175,7 @@ IsIonInlinablePC(jsbytecode* pc) {
 inline bool
 TooManyActualArguments(unsigned nargs)
 {
-    return nargs > js_JitOptions.maxStackArgs;
+    return nargs > JitOptions.maxStackArgs;
 }
 
 inline bool

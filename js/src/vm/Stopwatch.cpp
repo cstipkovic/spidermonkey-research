@@ -1,19 +1,35 @@
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ * vim: set ts=8 sts=4 et sw=4 tw=99:
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 #include "vm/Stopwatch.h"
 
 #include "mozilla/ArrayUtils.h"
 #include "mozilla/IntegerTypeTraits.h"
 #include "mozilla/unused.h"
 
+#if defined(XP_WIN)
+#include <processthreadsapi.h>
+#include <windows.h>
+#endif // defined(XP_WIN)
+
+#include "jscompartment.h"
+
+#include "gc/Zone.h"
+#include "vm/Runtime.h"
+
 namespace js {
 
 bool
 PerformanceMonitoring::addRecentGroup(PerformanceGroup* group)
 {
-  if (group->isUsedInThisIteration())
-    return true;
+    if (group->isUsedInThisIteration())
+        return true;
 
-  group->setIsUsedInThisIteration(true);
-  return recentGroups_.append(group);
+    group->setIsUsedInThisIteration(true);
+    return recentGroups_.append(group);
 }
 
 void
@@ -24,6 +40,14 @@ PerformanceMonitoring::reset()
     // be overwritten progressively during the execution.
     ++iteration_;
     recentGroups_.clear();
+
+    // Every so often, we will be rescheduled to another CPU. If this
+    // happens, we may end up with an entirely unsynchronized
+    // timestamp counter. If we do not reset
+    // `highestTimestampCounter_`, we could end up ignoring entirely
+    // valid sets of measures just because we are on a CPU that has a
+    // lower RDTSC.
+    highestTimestampCounter_ = 0;
 }
 
 void
@@ -128,7 +152,7 @@ PerformanceMonitoring::commit()
         return true;
     }
 
-    GroupVector recentGroups;
+    PerformanceGroupVector recentGroups;
     recentGroups_.swap(recentGroups);
 
     bool success = true;
@@ -140,6 +164,19 @@ PerformanceMonitoring::commit()
     // twice in succession).
     reset();
     return success;
+}
+
+uint64_t
+PerformanceMonitoring::monotonicReadTimestampCounter()
+{
+#if defined(MOZ_HAVE_RDTSC)
+    const uint64_t hardware = ReadTimestampCounter();
+    if (highestTimestampCounter_ < hardware)
+        highestTimestampCounter_ = hardware;
+    return highestTimestampCounter_;
+#else
+    return 0;
+#endif // defined(MOZ_HAVE_RDTSC)
 }
 
 void
@@ -163,7 +200,7 @@ PerformanceGroupHolder::unlink()
     groups_.clear();
 }
 
-const GroupVector*
+const PerformanceGroupVector*
 PerformanceGroupHolder::getGroups(JSContext* cx)
 {
     if (initialized_)
@@ -196,7 +233,7 @@ AutoStopwatch::AutoStopwatch(JSContext* cx MOZ_GUARD_OBJECT_NOTIFIER_PARAM_IN_IM
     JSRuntime* runtime = cx_->runtime();
     iteration_ = runtime->performanceMonitoring.iteration();
 
-    const GroupVector* groups = compartment->performanceMonitoring.getGroups(cx);
+    const PerformanceGroupVector* groups = compartment->performanceMonitoring.getGroups(cx);
     if (!groups) {
       // Either the embedding has not provided any performance
       // monitoring logistics or there was an error that prevents
@@ -205,8 +242,10 @@ AutoStopwatch::AutoStopwatch(JSContext* cx MOZ_GUARD_OBJECT_NOTIFIER_PARAM_IN_IM
     }
     for (auto group = groups->begin(); group < groups->end(); group++) {
       auto acquired = acquireGroup(*group);
-      if (acquired)
-        groups_.append(acquired);
+      if (acquired) {
+          if (!groups_.append(acquired))
+              MOZ_CRASH();
+      }
     }
     if (groups_.length() == 0) {
       // We are not in charge of monitoring anything.
@@ -254,7 +293,7 @@ AutoStopwatch::enter()
     }
 
     if (runtime->performanceMonitoring.isMonitoringJank()) {
-        cyclesStart_ = this->getCycles();
+        cyclesStart_ = this->getCycles(runtime);
         cpuStart_ = this->getCPU();
         isMonitoringJank_ = true;
     }
@@ -277,8 +316,8 @@ AutoStopwatch::exit()
         // limited.
         const cpuid_t cpuEnd = this->getCPU();
         if (isSameCPU(cpuStart_, cpuEnd)) {
-            const uint64_t cyclesEnd = getCycles();
-            cyclesDelta = getDelta(cyclesEnd, cyclesStart_);
+            const uint64_t cyclesEnd = getCycles(runtime);
+            cyclesDelta = cyclesEnd - cyclesStart_; // Always >= 0 by definition of `getCycles`.
         }
 #if WINVER >= 0x600
         updateTelemetry(cpuStart_, cpuEnd);
@@ -364,13 +403,9 @@ AutoStopwatch::getDelta(const uint64_t end, const uint64_t start) const
 }
 
 uint64_t
-AutoStopwatch::getCycles() const
+AutoStopwatch::getCycles(JSRuntime* runtime) const
 {
-#if defined(MOZ_HAVE_RDTSC)
-    return ReadTimestampCounter();
-#else
-    return 0;
-#endif // defined(MOZ_HAVE_RDTSC)
+    return runtime->performanceMonitoring.monotonicReadTimestampCounter();
 }
 
 cpuid_t inline
@@ -382,11 +417,9 @@ AutoStopwatch::getCPU() const
 
     cpuid_t result(proc.Group, proc.Number);
     return result;
-#elif defined(XP_LINUX)
-    return sched_getcpu();
 #else
     return {};
-#endif // defined(XP_WIN) || defined(XP_LINUX)
+#endif // defined(XP_WIN)
 }
 
 bool inline
@@ -394,8 +427,6 @@ AutoStopwatch::isSameCPU(const cpuid_t& a, const cpuid_t& b) const
 {
 #if defined(XP_WIN)  && WINVER >= _WIN32_WINNT_VISTA
     return a.group_ == b.group_ && a.number_ == b.number_;
-#elif defined(XP_LINUX)
-    return a == b;
 #else
     return true;
 #endif

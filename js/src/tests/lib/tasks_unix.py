@@ -2,10 +2,10 @@
 # waitpid to dispatch tasks.  This avoids several deadlocks that are possible
 # with fork/exec + threads + Python.
 
-import errno, os, select
+import errno, os, select, sys
 from datetime import datetime, timedelta
 from progressbar import ProgressBar
-from results import NullTestOutput, TestOutput
+from results import NullTestOutput, TestOutput, escape_cmdline
 
 class Task(object):
     def __init__(self, test, prefix, pid, stdout, stderr):
@@ -18,8 +18,15 @@ class Task(object):
         self.out = []
         self.err = []
 
-def spawn_test(test, prefix, passthrough=False):
+def spawn_test(test, prefix, passthrough, run_skipped, show_cmd):
     """Spawn one child, return a task struct."""
+    if not test.enable and not run_skipped:
+        return None
+
+    cmd = test.get_command(prefix)
+    if show_cmd:
+        print(escape_cmdline(cmd))
+
     if not passthrough:
         (rout, wout) = os.pipe()
         (rerr, werr) = os.pipe()
@@ -39,15 +46,7 @@ def spawn_test(test, prefix, passthrough=False):
         os.dup2(wout, 1)
         os.dup2(werr, 2)
 
-    cmd = test.get_command(prefix)
     os.execvp(cmd[0], cmd)
-
-def total_seconds(td):
-    """
-    Return the total number of seconds contained in the duration as a float
-    """
-    return (float(td.microseconds) \
-            + (td.seconds + td.days * 24 * 3600) * 10**6) / 10**6
 
 def get_max_wait(tasks, timeout):
     """
@@ -67,8 +66,8 @@ def get_max_wait(tasks, timeout):
             if remaining < wait:
                 wait = remaining
 
-    # Return the wait time in seconds, clamped to zero.
-    return max(total_seconds(wait), 0)
+    # Return the wait time in seconds, clamped between zero and max_wait.
+    return max(wait.total_seconds(), 0)
 
 def flush_input(fd, frags):
     """
@@ -104,7 +103,13 @@ def read_input(tasks, timeout):
         # us to respond immediately and not leave cores idle.
         exlist.append(t.stdout)
 
-    readable, _, _ = select.select(rlist, [], exlist, timeout)
+    readable = []
+    try:
+        readable, _, _ = select.select(rlist, [], exlist, timeout)
+    except OverflowError as e:
+        print >> sys.stderr, "timeout value", timeout
+        raise
+
     for fd in readable:
         flush_input(fd, outmap[fd])
 
@@ -170,7 +175,7 @@ def reap_zombies(tasks, timeout):
                 ''.join(ended.out),
                 ''.join(ended.err),
                 returncode,
-                total_seconds(datetime.now() - ended.start),
+                (datetime.now() - ended.start).total_seconds(),
                 timed_out(ended, timeout)))
     return tasks, finished
 
@@ -194,10 +199,12 @@ def run_all_tests(tests, prefix, pb, options):
     while len(tests) or len(tasks):
         while len(tests) and len(tasks) < options.worker_count:
             test = tests.pop()
-            if not test.enable and not options.run_skipped:
-                yield NullTestOutput(test)
+            task = spawn_test(test, prefix,
+                    options.passthrough, options.run_skipped, options.show_cmd)
+            if task:
+                tasks.append(task)
             else:
-                tasks.append(spawn_test(test, prefix, options.passthrough))
+                yield NullTestOutput(test)
 
         timeout = get_max_wait(tasks, options.timeout)
         read_input(tasks, timeout)

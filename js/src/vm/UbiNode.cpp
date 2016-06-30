@@ -34,9 +34,10 @@
 #include "jsobjinlines.h"
 #include "vm/Debugger-inl.h"
 
+using namespace js;
+
 using mozilla::Some;
 using mozilla::RangedPtr;
-using mozilla::UniquePtr;
 using JS::DispatchTyped;
 using JS::HandleValue;
 using JS::Value;
@@ -347,8 +348,7 @@ Concrete<JSObject>::jsObjectClassName() const
 }
 
 bool
-Concrete<JSObject>::jsObjectConstructorName(JSContext* cx,
-                                            UniquePtr<char16_t[], JS::FreePolicy>& outName) const
+Concrete<JSObject>::jsObjectConstructorName(JSContext* cx, UniqueTwoByteChars& outName) const
 {
     JSAtom* name = Concrete::get().maybeConstructorDisplayAtom();
     if (!name) {
@@ -418,7 +418,7 @@ bool
 RootList::init()
 {
     EdgeVectorTracer tracer(rt, &edges, wantNames);
-    JS_TraceRuntime(&tracer);
+    js::TraceRuntime(&tracer);
     if (!tracer.okay)
         return false;
     noGC.emplace(rt);
@@ -426,23 +426,37 @@ RootList::init()
 }
 
 bool
-RootList::init(ZoneSet& debuggees)
+RootList::init(CompartmentSet& debuggees)
 {
     EdgeVector allRootEdges;
     EdgeVectorTracer tracer(rt, &allRootEdges, wantNames);
 
-    JS_TraceRuntime(&tracer);
+    ZoneSet debuggeeZones;
+    if (!debuggeeZones.init())
+        return false;
+    for (auto range = debuggees.all(); !range.empty(); range.popFront()) {
+        if (!debuggeeZones.put(range.front()->zone()))
+            return false;
+    }
+
+    js::TraceRuntime(&tracer);
     if (!tracer.okay)
         return false;
-    JS_TraceIncomingCCWs(&tracer, debuggees);
+    TraceIncomingCCWs(&tracer, debuggees);
     if (!tracer.okay)
         return false;
 
     for (EdgeVector::Range r = allRootEdges.all(); !r.empty(); r.popFront()) {
         Edge& edge = r.front();
-        Zone* zone = edge.referent.zone();
-        if (zone && !debuggees.has(zone))
+
+        JSCompartment* compartment = edge.referent.compartment();
+        if (compartment && !debuggees.has(compartment))
             continue;
+
+        Zone* zone = edge.referent.zone();
+        if (zone && !debuggeeZones.has(zone))
+            continue;
+
         if (!edges.append(mozilla::Move(edge)))
             return false;
     }
@@ -457,16 +471,16 @@ RootList::init(HandleObject debuggees)
     MOZ_ASSERT(debuggees && JS::dbg::IsDebugger(*debuggees));
     js::Debugger* dbg = js::Debugger::fromJSObject(debuggees.get());
 
-    ZoneSet debuggeeZones;
-    if (!debuggeeZones.init())
+    CompartmentSet debuggeeCompartments;
+    if (!debuggeeCompartments.init())
         return false;
 
     for (js::WeakGlobalObjectSet::Range r = dbg->allDebuggees(); !r.empty(); r.popFront()) {
-        if (!debuggeeZones.put(r.front()->zone()))
+        if (!debuggeeCompartments.put(r.front()->compartment()))
             return false;
     }
 
-    if (!init(debuggeeZones))
+    if (!init(debuggeeCompartments))
         return false;
 
     // Ensure that each of our debuggee globals are in the root list.
@@ -487,7 +501,7 @@ RootList::addRoot(Node node, const char16_t* edgeName)
     MOZ_ASSERT(noGC.isSome());
     MOZ_ASSERT_IF(wantNames, edgeName);
 
-    UniquePtr<char16_t[], JS::FreePolicy> name;
+    UniqueTwoByteChars name;
     if (edgeName) {
         name = js::DuplicateString(edgeName);
         if (!name)
@@ -497,7 +511,7 @@ RootList::addRoot(Node node, const char16_t* edgeName)
     return edges.append(mozilla::Move(Edge(name.release(), node)));
 }
 
-const char16_t Concrete<RootList>::concreteTypeName[] = MOZ_UTF16("RootList");
+const char16_t Concrete<RootList>::concreteTypeName[] = MOZ_UTF16("JS::ubi::RootList");
 
 UniquePtr<EdgeRange>
 Concrete<RootList>::edges(JSRuntime* rt, bool wantNames) const {

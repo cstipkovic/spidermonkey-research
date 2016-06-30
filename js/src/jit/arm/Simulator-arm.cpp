@@ -35,7 +35,7 @@
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/SizePrintfMacros.h"
 
-#include "asmjs/AsmJSValidate.h"
+#include "asmjs/WasmSignalHandlers.h"
 #include "jit/arm/Assembler-arm.h"
 #include "jit/arm/disasm/Constants-arm.h"
 #include "jit/AtomicOperations.h"
@@ -1511,10 +1511,21 @@ Simulator::readW(int32_t addr, SimInstruction* instr)
     if ((addr & 3) == 0 || !HasAlignmentFault()) {
         intptr_t* ptr = reinterpret_cast<intptr_t*>(addr);
         return *ptr;
-    } else {
-        printf("Unaligned write at 0x%08x, pc=%p\n", addr, instr);
-        MOZ_CRASH();
     }
+
+    // In WebAssembly, we want unaligned accesses to either raise a signal or
+    // do the right thing. Making this simulator properly emulate the behavior
+    // of raising a signal is complex, so as a special-case, when in wasm code,
+    // we just do the right thing.
+    if (wasm::IsPCInWasmCode(reinterpret_cast<void *>(get_pc()))) {
+        char* ptr = reinterpret_cast<char*>(addr);
+        int value;
+        memcpy(&value, ptr, sizeof(value));
+        return value;
+    }
+
+    printf("Unaligned read at 0x%08x, pc=%p\n", addr, instr);
+    MOZ_CRASH();
 }
 
 void
@@ -1523,10 +1534,18 @@ Simulator::writeW(int32_t addr, int value, SimInstruction* instr)
     if ((addr & 3) == 0) {
         intptr_t* ptr = reinterpret_cast<intptr_t*>(addr);
         *ptr = value;
-    } else {
-        printf("Unaligned write at 0x%08x, pc=%p\n", addr, instr);
-        MOZ_CRASH();
+        return;
     }
+
+    // See the comments above in readW.
+    if (wasm::IsPCInWasmCode(reinterpret_cast<void *>(get_pc()))) {
+        char* ptr = reinterpret_cast<char*>(addr);
+        memcpy(ptr, &value, sizeof(value));
+        return;
+    }
+
+    printf("Unaligned write at 0x%08x, pc=%p\n", addr, instr);
+    MOZ_CRASH();
 }
 
 // For the time being, define Relaxed operations in terms of SeqCst
@@ -4463,7 +4482,7 @@ Simulator::execute()
             int32_t rpc = resume_pc_;
             if (MOZ_UNLIKELY(rpc != 0)) {
                 // AsmJS signal handler ran and we have to adjust the pc.
-                JSRuntime::innermostAsmJSActivation()->setResumePC((void*)get_pc());
+                JSRuntime::innermostWasmActivation()->setResumePC((void*)get_pc());
                 set_pc(rpc);
                 resume_pc_ = 0;
             }
@@ -4597,7 +4616,7 @@ Simulator::callInternal(uint8_t* entry)
     }
 }
 
-int64_t
+int32_t
 Simulator::call(uint8_t* entry, int argument_count, ...)
 {
     va_list parameters;
@@ -4634,7 +4653,7 @@ Simulator::call(uint8_t* entry, int argument_count, ...)
     MOZ_ASSERT(entry_stack == get_register(sp));
     set_register(sp, original_stack);
 
-    int64_t result = (int64_t(get_register(r1)) << 32) | get_register(r0);
+    int32_t result = get_register(r0);
     return result;
 }
 
