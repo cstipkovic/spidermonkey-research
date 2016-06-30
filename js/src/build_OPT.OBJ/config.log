@@ -21,7 +21,7 @@ INFO: checking for the target C compiler...
 DEBUG: _cc: Trying gcc
 INFO: /usr/bin/gcc
 INFO: checking whether the target C compiler can be used... 
-DEBUG: Creating `/tmp/conftest.R3D9z6.c` with content:
+DEBUG: Creating `/tmp/conftest.0ZXWkw.c` with content:
 DEBUG: | #if defined(_MSC_VER)
 DEBUG: | #if defined(__clang__)
 DEBUG: | %COMPILER clang-cl
@@ -47,11 +47,11 @@ DEBUG: | %STDC_VERSION __STDC_VERSION__
 DEBUG: | #elif __STDC__
 DEBUG: | %STDC_VERSION 198900L
 DEBUG: | #endif
-DEBUG: Executing: `/usr/bin/gcc -E /tmp/conftest.R3D9z6.c`
+DEBUG: Executing: `/usr/bin/gcc -E /tmp/conftest.0ZXWkw.c`
 DEBUG: COMPILER = gcc
 DEBUG: VERSION = 4.8.4
 DEBUG: STDC_VERSION = 198900L
-DEBUG: Creating `/tmp/conftest.jaSQKh.c` with content:
+DEBUG: Creating `/tmp/conftest.DzplxQ.c` with content:
 DEBUG: | #if defined(_MSC_VER)
 DEBUG: | #if defined(__clang__)
 DEBUG: | %COMPILER clang-cl
@@ -77,7 +77,7 @@ DEBUG: | %STDC_VERSION __STDC_VERSION__
 DEBUG: | #elif __STDC__
 DEBUG: | %STDC_VERSION 198900L
 DEBUG: | #endif
-DEBUG: Executing: `/usr/bin/gcc -std=gnu99 -E /tmp/conftest.jaSQKh.c`
+DEBUG: Executing: `/usr/bin/gcc -std=gnu99 -E /tmp/conftest.DzplxQ.c`
 DEBUG: COMPILER = gcc
 DEBUG: VERSION = 4.8.4
 DEBUG: STDC_VERSION = 199901L
@@ -88,7 +88,7 @@ INFO: checking for the target C++ compiler...
 DEBUG: _cxx: Trying /usr/bin/g++
 INFO: /usr/bin/g++
 INFO: checking whether the target C++ compiler can be used... 
-DEBUG: Creating `/tmp/conftest.kyN1Tr.cpp` with content:
+DEBUG: Creating `/tmp/conftest.PmZ2B6.cpp` with content:
 DEBUG: | #if defined(_MSC_VER)
 DEBUG: | #if defined(__clang__)
 DEBUG: | %COMPILER clang-cl
@@ -114,11 +114,11 @@ DEBUG: | %STDC_VERSION __STDC_VERSION__
 DEBUG: | #elif __STDC__
 DEBUG: | %STDC_VERSION 198900L
 DEBUG: | #endif
-DEBUG: Executing: `/usr/bin/g++ -E /tmp/conftest.kyN1Tr.cpp`
+DEBUG: Executing: `/usr/bin/g++ -E /tmp/conftest.PmZ2B6.cpp`
 DEBUG: COMPILER = gcc
 DEBUG: VERSION = 4.8.4
 DEBUG: cplusplus = 199711L
-DEBUG: Creating `/tmp/conftest.ILMcdM.cpp` with content:
+DEBUG: Creating `/tmp/conftest.EUTPKT.cpp` with content:
 DEBUG: | #if defined(_MSC_VER)
 DEBUG: | #if defined(__clang__)
 DEBUG: | %COMPILER clang-cl
@@ -144,7 +144,7 @@ DEBUG: | %STDC_VERSION __STDC_VERSION__
 DEBUG: | #elif __STDC__
 DEBUG: | %STDC_VERSION 198900L
 DEBUG: | #endif
-DEBUG: Executing: `/usr/bin/g++ -std=gnu++11 -E /tmp/conftest.ILMcdM.cpp`
+DEBUG: Executing: `/usr/bin/g++ -std=gnu++11 -E /tmp/conftest.EUTPKT.cpp`
 DEBUG: COMPILER = gcc
 DEBUG: VERSION = 4.8.4
 DEBUG: cplusplus = 201103L
@@ -155,7 +155,7 @@ INFO: checking for the host C compiler...
 DEBUG: _host_cc: Trying /usr/bin/gcc
 INFO: /usr/bin/gcc
 INFO: checking whether the host C compiler can be used... 
-DEBUG: Creating `/tmp/conftest.iJehVB.c` with content:
+DEBUG: Creating `/tmp/conftest.jtziUb.c` with content:
 DEBUG: | #if defined(_MSC_VER)
 DEBUG: | #if defined(__clang__)
 DEBUG: | %COMPILER clang-cl
@@ -181,7 +181,7 @@ DEBUG: | %STDC_VERSION __STDC_VERSION__
 DEBUG: | #elif __STDC__
 DEBUG: | %STDC_VERSION 198900L
 DEBUG: | #endif
-DEBUG: Executing: `/usr/bin/gcc -std=gnu99 -E /tmp/conftest.iJehVB.c`
+DEBUG: Executing: `/usr/bin/gcc -std=gnu99 -E /tmp/conftest.jtziUb.c`
 DEBUG: COMPILER = gcc
 DEBUG: VERSION = 4.8.4
 DEBUG: STDC_VERSION = 199901L
@@ -192,7 +192,7 @@ INFO: checking for the host C++ compiler...
 DEBUG: _host_cxx: Trying /usr/bin/g++
 INFO: /usr/bin/g++
 INFO: checking whether the host C++ compiler can be used... 
-DEBUG: Creating `/tmp/conftest.D8PATh.cpp` with content:
+DEBUG: Creating `/tmp/conftest.Xi4eaJ.cpp` with content:
 DEBUG: | #if defined(_MSC_VER)
 DEBUG: | #if defined(__clang__)
 DEBUG: | %COMPILER clang-cl
@@ -218,7 +218,7 @@ DEBUG: | %STDC_VERSION __STDC_VERSION__
 DEBUG: | #elif __STDC__
 DEBUG: | %STDC_VERSION 198900L
 DEBUG: | #endif
-DEBUG: Executing: `/usr/bin/g++ -std=gnu++11 -E /tmp/conftest.D8PATh.cpp`
+DEBUG: Executing: `/usr/bin/g++ -std=gnu++11 -E /tmp/conftest.Xi4eaJ.cpp`
 DEBUG: COMPILER = gcc
 DEBUG: VERSION = 4.8.4
 DEBUG: cplusplus = 201103L
@@ -705,7 +705,7 @@ gethostbyname_r()
 ; return 0; }
 configure:9269: checking for library containing dlopen
 configure:9287: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c  1>&5
-/tmp/ccu2xkYK.o:conftest.c:function main: error: undefined reference to 'dlopen'
+/tmp/cc2sNFdW.o:conftest.c:function main: error: undefined reference to 'dlopen'
 collect2: error: ld returned 1 exit status
 configure: failed program was:
 #line 9276 "configure"
@@ -739,7 +739,7 @@ socket()
 configure:9482: checking for pthread_create in -lpthreads
 configure:9501: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lpthreads  -ldl  1>&5
 /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold/ld: error: cannot find -lpthreads
-/tmp/ccjWn2rP.o:conftest.c:function main: error: undefined reference to 'pthread_create'
+/tmp/ccX5UNh2.o:conftest.c:function main: error: undefined reference to 'pthread_create'
 collect2: error: ld returned 1 exit status
 configure: failed program was:
 #line 9490 "configure"
@@ -767,7 +767,7 @@ configure:9849: checking for getc_unlocked
 configure:9881: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
 configure:9849: checking for _getc_nolock
 configure:9881: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
-/tmp/ccO8nKT2.o:conftest.c:function main: error: undefined reference to '_getc_nolock'
+/tmp/ccn450u8.o:conftest.c:function main: error: undefined reference to '_getc_nolock'
 collect2: error: ld returned 1 exit status
 configure: failed program was:
 #line 9854 "configure"
@@ -807,7 +807,7 @@ configure:9977: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -
 configure:9970:6: warning: conflicting types for built-in function 'sin' [enabled by default]
 configure:10008: checking for __sincos in -lm
 configure:10027: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm  -lm -ldl  1>&5
-/tmp/ccEbdsae.o:conftest.c:function main: error: undefined reference to '__sincos'
+/tmp/ccroVC5k.o:conftest.c:function main: error: undefined reference to '__sincos'
 collect2: error: ld returned 1 exit status
 configure: failed program was:
 #line 10016 "configure"
