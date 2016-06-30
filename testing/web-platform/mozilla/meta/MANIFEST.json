@@ -1,0 +1,19 @@
+{
+  "items": {
+    "manual": [],
+    "reftest": [],
+    "stub": [],
+    "testharness": [],
+    "wdspec": []
+  },
+  "local_changes": {
+    "deleted": [],
+    "deleted_reftests": {},
+    "items": {},
+    "reftest_nodes": {}
+  },
+  "reftest_nodes": {},
+  "rev": null,
+  "url_base": "/_mozilla/",
+  "version": 3
+}

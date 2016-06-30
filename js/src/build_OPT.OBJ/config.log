@@ -1,0 +1,887 @@
+INFO: checking for a shell... 
+INFO: /bin/sh
+INFO: checking for host system type... 
+INFO: x86_64-pc-linux-gnu
+INFO: checking for target system type... 
+INFO: x86_64-pc-linux-gnu
+INFO: checking for the Android toolchain directory... 
+INFO: not found
+INFO: checking whether cross compiling... 
+INFO: no
+INFO: checking for pkg_config... 
+DEBUG: pkg_config: Trying pkg-config
+INFO: /usr/bin/pkg-config
+INFO: checking for pkg-config version... 
+DEBUG: Executing: `/usr/bin/pkg-config --version`
+INFO: 0.26
+INFO: checking for yasm... 
+DEBUG: yasm: Trying yasm
+INFO: not found
+INFO: checking for the target C compiler... 
+DEBUG: _cc: Trying gcc
+INFO: /usr/bin/gcc
+INFO: checking whether the target C compiler can be used... 
+DEBUG: Creating `/tmp/conftest.R3D9z6.c` with content:
+DEBUG: | #if defined(_MSC_VER)
+DEBUG: | #if defined(__clang__)
+DEBUG: | %COMPILER clang-cl
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #else
+DEBUG: | %COMPILER msvc
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #endif
+DEBUG: | #elif defined(__clang__)
+DEBUG: | %COMPILER clang
+DEBUG: | #  if !__cplusplus || __cpp_static_assert
+DEBUG: | %VERSION __clang_major__.__clang_minor__.__clang_patchlevel__
+DEBUG: | #  endif
+DEBUG: | #elif defined(__GNUC__)
+DEBUG: | %COMPILER gcc
+DEBUG: | %VERSION __GNUC__.__GNUC_MINOR__.__GNUC_PATCHLEVEL__
+DEBUG: | #endif
+DEBUG: | 
+DEBUG: | #if __cplusplus
+DEBUG: | %cplusplus __cplusplus
+DEBUG: | #elif __STDC_VERSION__
+DEBUG: | %STDC_VERSION __STDC_VERSION__
+DEBUG: | #elif __STDC__
+DEBUG: | %STDC_VERSION 198900L
+DEBUG: | #endif
+DEBUG: Executing: `/usr/bin/gcc -E /tmp/conftest.R3D9z6.c`
+DEBUG: COMPILER = gcc
+DEBUG: VERSION = 4.8.4
+DEBUG: STDC_VERSION = 198900L
+DEBUG: Creating `/tmp/conftest.jaSQKh.c` with content:
+DEBUG: | #if defined(_MSC_VER)
+DEBUG: | #if defined(__clang__)
+DEBUG: | %COMPILER clang-cl
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #else
+DEBUG: | %COMPILER msvc
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #endif
+DEBUG: | #elif defined(__clang__)
+DEBUG: | %COMPILER clang
+DEBUG: | #  if !__cplusplus || __cpp_static_assert
+DEBUG: | %VERSION __clang_major__.__clang_minor__.__clang_patchlevel__
+DEBUG: | #  endif
+DEBUG: | #elif defined(__GNUC__)
+DEBUG: | %COMPILER gcc
+DEBUG: | %VERSION __GNUC__.__GNUC_MINOR__.__GNUC_PATCHLEVEL__
+DEBUG: | #endif
+DEBUG: | 
+DEBUG: | #if __cplusplus
+DEBUG: | %cplusplus __cplusplus
+DEBUG: | #elif __STDC_VERSION__
+DEBUG: | %STDC_VERSION __STDC_VERSION__
+DEBUG: | #elif __STDC__
+DEBUG: | %STDC_VERSION 198900L
+DEBUG: | #endif
+DEBUG: Executing: `/usr/bin/gcc -std=gnu99 -E /tmp/conftest.jaSQKh.c`
+DEBUG: COMPILER = gcc
+DEBUG: VERSION = 4.8.4
+DEBUG: STDC_VERSION = 199901L
+INFO: yes
+INFO: checking the target C compiler version... 
+INFO: 4.8.4
+INFO: checking for the target C++ compiler... 
+DEBUG: _cxx: Trying /usr/bin/g++
+INFO: /usr/bin/g++
+INFO: checking whether the target C++ compiler can be used... 
+DEBUG: Creating `/tmp/conftest.kyN1Tr.cpp` with content:
+DEBUG: | #if defined(_MSC_VER)
+DEBUG: | #if defined(__clang__)
+DEBUG: | %COMPILER clang-cl
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #else
+DEBUG: | %COMPILER msvc
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #endif
+DEBUG: | #elif defined(__clang__)
+DEBUG: | %COMPILER clang
+DEBUG: | #  if !__cplusplus || __cpp_static_assert
+DEBUG: | %VERSION __clang_major__.__clang_minor__.__clang_patchlevel__
+DEBUG: | #  endif
+DEBUG: | #elif defined(__GNUC__)
+DEBUG: | %COMPILER gcc
+DEBUG: | %VERSION __GNUC__.__GNUC_MINOR__.__GNUC_PATCHLEVEL__
+DEBUG: | #endif
+DEBUG: | 
+DEBUG: | #if __cplusplus
+DEBUG: | %cplusplus __cplusplus
+DEBUG: | #elif __STDC_VERSION__
+DEBUG: | %STDC_VERSION __STDC_VERSION__
+DEBUG: | #elif __STDC__
+DEBUG: | %STDC_VERSION 198900L
+DEBUG: | #endif
+DEBUG: Executing: `/usr/bin/g++ -E /tmp/conftest.kyN1Tr.cpp`
+DEBUG: COMPILER = gcc
+DEBUG: VERSION = 4.8.4
+DEBUG: cplusplus = 199711L
+DEBUG: Creating `/tmp/conftest.ILMcdM.cpp` with content:
+DEBUG: | #if defined(_MSC_VER)
+DEBUG: | #if defined(__clang__)
+DEBUG: | %COMPILER clang-cl
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #else
+DEBUG: | %COMPILER msvc
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #endif
+DEBUG: | #elif defined(__clang__)
+DEBUG: | %COMPILER clang
+DEBUG: | #  if !__cplusplus || __cpp_static_assert
+DEBUG: | %VERSION __clang_major__.__clang_minor__.__clang_patchlevel__
+DEBUG: | #  endif
+DEBUG: | #elif defined(__GNUC__)
+DEBUG: | %COMPILER gcc
+DEBUG: | %VERSION __GNUC__.__GNUC_MINOR__.__GNUC_PATCHLEVEL__
+DEBUG: | #endif
+DEBUG: | 
+DEBUG: | #if __cplusplus
+DEBUG: | %cplusplus __cplusplus
+DEBUG: | #elif __STDC_VERSION__
+DEBUG: | %STDC_VERSION __STDC_VERSION__
+DEBUG: | #elif __STDC__
+DEBUG: | %STDC_VERSION 198900L
+DEBUG: | #endif
+DEBUG: Executing: `/usr/bin/g++ -std=gnu++11 -E /tmp/conftest.ILMcdM.cpp`
+DEBUG: COMPILER = gcc
+DEBUG: VERSION = 4.8.4
+DEBUG: cplusplus = 201103L
+INFO: yes
+INFO: checking the target C++ compiler version... 
+INFO: 4.8.4
+INFO: checking for the host C compiler... 
+DEBUG: _host_cc: Trying /usr/bin/gcc
+INFO: /usr/bin/gcc
+INFO: checking whether the host C compiler can be used... 
+DEBUG: Creating `/tmp/conftest.iJehVB.c` with content:
+DEBUG: | #if defined(_MSC_VER)
+DEBUG: | #if defined(__clang__)
+DEBUG: | %COMPILER clang-cl
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #else
+DEBUG: | %COMPILER msvc
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #endif
+DEBUG: | #elif defined(__clang__)
+DEBUG: | %COMPILER clang
+DEBUG: | #  if !__cplusplus || __cpp_static_assert
+DEBUG: | %VERSION __clang_major__.__clang_minor__.__clang_patchlevel__
+DEBUG: | #  endif
+DEBUG: | #elif defined(__GNUC__)
+DEBUG: | %COMPILER gcc
+DEBUG: | %VERSION __GNUC__.__GNUC_MINOR__.__GNUC_PATCHLEVEL__
+DEBUG: | #endif
+DEBUG: | 
+DEBUG: | #if __cplusplus
+DEBUG: | %cplusplus __cplusplus
+DEBUG: | #elif __STDC_VERSION__
+DEBUG: | %STDC_VERSION __STDC_VERSION__
+DEBUG: | #elif __STDC__
+DEBUG: | %STDC_VERSION 198900L
+DEBUG: | #endif
+DEBUG: Executing: `/usr/bin/gcc -std=gnu99 -E /tmp/conftest.iJehVB.c`
+DEBUG: COMPILER = gcc
+DEBUG: VERSION = 4.8.4
+DEBUG: STDC_VERSION = 199901L
+INFO: yes
+INFO: checking the host C compiler version... 
+INFO: 4.8.4
+INFO: checking for the host C++ compiler... 
+DEBUG: _host_cxx: Trying /usr/bin/g++
+INFO: /usr/bin/g++
+INFO: checking whether the host C++ compiler can be used... 
+DEBUG: Creating `/tmp/conftest.D8PATh.cpp` with content:
+DEBUG: | #if defined(_MSC_VER)
+DEBUG: | #if defined(__clang__)
+DEBUG: | %COMPILER clang-cl
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #else
+DEBUG: | %COMPILER msvc
+DEBUG: | %VERSION _MSC_FULL_VER
+DEBUG: | #endif
+DEBUG: | #elif defined(__clang__)
+DEBUG: | %COMPILER clang
+DEBUG: | #  if !__cplusplus || __cpp_static_assert
+DEBUG: | %VERSION __clang_major__.__clang_minor__.__clang_patchlevel__
+DEBUG: | #  endif
+DEBUG: | #elif defined(__GNUC__)
+DEBUG: | %COMPILER gcc
+DEBUG: | %VERSION __GNUC__.__GNUC_MINOR__.__GNUC_PATCHLEVEL__
+DEBUG: | #endif
+DEBUG: | 
+DEBUG: | #if __cplusplus
+DEBUG: | %cplusplus __cplusplus
+DEBUG: | #elif __STDC_VERSION__
+DEBUG: | %STDC_VERSION __STDC_VERSION__
+DEBUG: | #elif __STDC__
+DEBUG: | %STDC_VERSION 198900L
+DEBUG: | #endif
+DEBUG: Executing: `/usr/bin/g++ -std=gnu++11 -E /tmp/conftest.D8PATh.cpp`
+DEBUG: COMPILER = gcc
+DEBUG: VERSION = 4.8.4
+DEBUG: cplusplus = 201103L
+INFO: yes
+INFO: checking the host C++ compiler version... 
+INFO: 4.8.4
+INFO: checking for awk... 
+DEBUG: awk: Trying gawk
+INFO: /usr/bin/gawk
+INFO: checking for perl... 
+DEBUG: perl: Trying perl5
+DEBUG: perl: Trying perl
+INFO: /usr/bin/perl
+INFO: checking for minimum required perl version >= 5.006... 
+DEBUG: Executing: `/usr/bin/perl -e 'print $]'`
+INFO: 5.018002
+INFO: checking for full perl installation... 
+INFO: yes
+INFO: checking for doxygen... 
+DEBUG: doxygen: Trying doxygen
+INFO: not found
+INFO: checking for xargs... 
+DEBUG: xargs: Trying xargs
+INFO: /usr/bin/xargs
+INFO: checking for rpmbuild... 
+DEBUG: rpmbuild: Trying rpmbuild
+INFO: /usr/bin/rpmbuild
+INFO: checking for autoconf... 
+INFO: /usr/bin/autoconf2.13
+INFO: Refreshing /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/old-configure with /usr/bin/autoconf2.13
+DEBUG: Injecting the following to old-configure:
+DEBUG: | export AUTOCONF=/usr/bin/autoconf2.13
+DEBUG: | PYTHON=/home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/_virtualenv/bin/python
+DEBUG: | CROSS_COMPILE=
+DEBUG: | OS_TARGET=Linux
+DEBUG: | OS_ARCH=Linux
+DEBUG: | OS_TEST=x86_64
+DEBUG: | CPU_ARCH=x86_64
+DEBUG: | HOST_OS_ARCH=Linux
+DEBUG: | MOZ_BUILD_APP=js
+DEBUG: | NIGHTLY_BUILD=1
+DEBUG: | MOZ_UPDATE_CHANNEL=default
+DEBUG: | PKG_CONFIG=/usr/bin/pkg-config
+DEBUG: | JS_STANDALONE=1
+DEBUG: | JS_SHARED_LIBRARY=1
+DEBUG: | COMPILE_ENVIRONMENT=1
+DEBUG: | MOZ_DEBUG=
+DEBUG: | CC='/usr/bin/gcc -std=gnu99'
+DEBUG: | CC_TYPE=gcc
+DEBUG: | CC_VERSION=4.8.4
+DEBUG: | CXX='/usr/bin/g++ -std=gnu++11'
+DEBUG: | HOST_CC='/usr/bin/gcc -std=gnu99'
+DEBUG: | HOST_CC_TYPE=gcc
+DEBUG: | HOST_CC_VERSION=4.8.4
+DEBUG: | HOST_CXX='/usr/bin/g++ -std=gnu++11'
+DEBUG: | MOZ_DEBUG_FLAGS=-g
+DEBUG: | MOZ_MEMORY=1
+DEBUG: | AWK=/usr/bin/gawk
+DEBUG: | PERL=/usr/bin/perl
+DEBUG: Running /bin/sh /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/old-configure --host=x86_64-pc-linux-gnu --target=x86_64-pc-linux-gnu --enable-jemalloc
+This file contains any messages produced by compilers while
+running configure, to aid debugging if configure makes a mistake.
+
+configure:841: checking host system type
+configure:862: checking target system type
+configure:880: checking build system type
+configure:2216: checking for gcc
+configure:2329: checking whether the C compiler (/usr/bin/gcc -std=gnu99  ) works
+configure:2345: /usr/bin/gcc -std=gnu99 -o conftest    conftest.c  1>&5
+configure:2342:1: warning: return type defaults to 'int' [enabled by default]
+configure:2371: checking whether the C compiler (/usr/bin/gcc -std=gnu99  ) is a cross-compiler
+configure:2376: checking whether we are using GNU C
+configure:2385: /usr/bin/gcc -std=gnu99 -E conftest.c
+configure:2404: checking whether /usr/bin/gcc -std=gnu99 accepts -g
+configure:2440: checking for c++
+configure:2472: checking whether the C++ compiler (/usr/bin/g++ -std=gnu++11  ) works
+configure:2488: /usr/bin/g++ -std=gnu++11 -o conftest    conftest.C  1>&5
+configure:2514: checking whether the C++ compiler (/usr/bin/g++ -std=gnu++11  ) is a cross-compiler
+configure:2519: checking whether we are using GNU C++
+configure:2528: /usr/bin/g++ -std=gnu++11 -E conftest.C
+configure:2547: checking whether /usr/bin/g++ -std=gnu++11 accepts -g
+configure:2581: checking for ranlib
+configure:2613: checking for as
+configure:2667: checking for ar
+configure:2702: checking for ld
+configure:2737: checking for strip
+configure:2772: checking for windres
+configure:2862: checking how to run the C preprocessor
+configure:2883: /usr/bin/gcc -std=gnu99 -E  conftest.c >/dev/null 2>conftest.out
+configure:2942: checking how to run the C++ preprocessor
+configure:2960: /usr/bin/g++ -std=gnu++11 -E  conftest.C >/dev/null 2>conftest.out
+configure:3392: checking for sb-conf
+configure:3392: checking for ve
+configure:3588: checking for gmake
+configure:3588: checking for make
+configure:3655: checking for X
+configure:3722: /usr/bin/gcc -std=gnu99 -E  conftest.c >/dev/null 2>conftest.out
+configure:3718:27: fatal error: X11/Intrinsic.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 3717 "configure"
+#include "confdefs.h"
+#include <X11/Intrinsic.h>
+configure:3798: /usr/bin/gcc -std=gnu99 -o conftest    conftest.c -lXt  1>&5
+configure: In function 'main':
+configure:3794:1: warning: implicit declaration of function 'XtMalloc' [-Wimplicit-function-declaration]
+/usr/bin/ld: cannot find -lXt
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 3791 "configure"
+#include "confdefs.h"
+
+int main() {
+XtMalloc()
+; return 0; }
+configure:4710: /usr/bin/gcc -std=gnu99 -c   conftest.c 1>&5
+configure: In function 'main':
+configure:4706:15: error: '__thumb2__' undeclared (first use in this function)
+configure:4706:15: note: each undeclared identifier is reported only once for each function it appears in
+configure: failed program was:
+#line 4703 "configure"
+#include "confdefs.h"
+
+int main() {
+return sizeof(__thumb2__);
+; return 0; }
+configure:4955: checking that static assertion macros used in autoconf tests work
+configure:4976: /usr/bin/gcc -std=gnu99 -c   conftest.c 1>&5
+configure:4993: /usr/bin/gcc -std=gnu99 -c   conftest.c 1>&5
+configure: In function 'main':
+configure:4990:68: error: size of array 'static_assert_line_4993' is negative
+configure:4989:55: note: in expansion of macro 'CONFIGURE_STATIC_ASSERT_IMPL2'
+configure:4988:44: note: in expansion of macro 'CONFIGURE_STATIC_ASSERT_IMPL'
+configure:4993:1: note: in expansion of macro 'CONFIGURE_STATIC_ASSERT'
+configure: failed program was:
+#line 4986 "configure"
+#include "confdefs.h"
+
+#define CONFIGURE_STATIC_ASSERT(condition) CONFIGURE_STATIC_ASSERT_IMPL(condition, __LINE__)
+#define CONFIGURE_STATIC_ASSERT_IMPL(condition, line) CONFIGURE_STATIC_ASSERT_IMPL2(condition, line)
+#define CONFIGURE_STATIC_ASSERT_IMPL2(condition, line) typedef int static_assert_line_##line[(condition) ? 1 : -1]
+
+int main() {
+CONFIGURE_STATIC_ASSERT(0)
+; return 0; }
+configure:5016: /usr/bin/g++ -std=gnu++11 -c   conftest.C 1>&5
+configure:5033: /usr/bin/g++ -std=gnu++11 -c   conftest.C 1>&5
+configure: In function 'int main()':
+configure:5030:114: error: size of array 'static_assert_line_5033' is negative
+configure:5029:55: note: in expansion of macro 'CONFIGURE_STATIC_ASSERT_IMPL2'
+configure:5028:44: note: in expansion of macro 'CONFIGURE_STATIC_ASSERT_IMPL'
+configure:5033:1: note: in expansion of macro 'CONFIGURE_STATIC_ASSERT'
+configure: failed program was:
+#line 5026 "configure"
+#include "confdefs.h"
+
+#define CONFIGURE_STATIC_ASSERT(condition) CONFIGURE_STATIC_ASSERT_IMPL(condition, __LINE__)
+#define CONFIGURE_STATIC_ASSERT_IMPL(condition, line) CONFIGURE_STATIC_ASSERT_IMPL2(condition, line)
+#define CONFIGURE_STATIC_ASSERT_IMPL2(condition, line) typedef int static_assert_line_##line[(condition) ? 1 : -1]
+
+int main() {
+CONFIGURE_STATIC_ASSERT(0)
+; return 0; }
+configure:5401: checking for --noexecstack option to as
+configure:5412: /usr/bin/gcc -std=gnu99 -c  -Wa,--noexecstack  conftest.c 1>&5
+configure:5425: checking for -z noexecstack option to ld
+configure:5436: /usr/bin/gcc -std=gnu99 -o conftest    -Wl,-z,noexecstack conftest.c  1>&5
+configure:5449: checking for -z text option to ld
+configure:5460: /usr/bin/gcc -std=gnu99 -o conftest    -Wl,-z,noexecstack -Wl,-z,text conftest.c  1>&5
+configure:5474: checking for --build-id option to ld
+configure:5485: /usr/bin/gcc -std=gnu99 -o conftest    -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id conftest.c  1>&5
+configure:5532: checking whether the C compiler supports -Wclass-varargs
+configure:5555: /usr/bin/gcc -std=gnu99 -c  -Werror -Wclass-varargs  conftest.c 1>&5
+gcc: error: unrecognized command line option '-Wclass-varargs'
+configure: failed program was:
+#line 5548 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:5583: checking whether the C compiler supports -Wloop-analysis
+configure:5606: /usr/bin/gcc -std=gnu99 -c  -Werror -Wloop-analysis  conftest.c 1>&5
+gcc: error: unrecognized command line option '-Wloop-analysis'
+configure: failed program was:
+#line 5599 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:5689: checking whether the C compiler supports -Wstring-conversion
+configure:5712: /usr/bin/gcc -std=gnu99 -c  -Werror -Wstring-conversion  conftest.c 1>&5
+gcc: error: unrecognized command line option '-Wstring-conversion'
+configure: failed program was:
+#line 5705 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:5740: checking whether the C compiler supports -Wthread-safety
+configure:5763: /usr/bin/gcc -std=gnu99 -c  -Werror -Wthread-safety  conftest.c 1>&5
+gcc: error: unrecognized command line option '-Wthread-safety'
+configure: failed program was:
+#line 5756 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:5800: checking whether the C compiler supports -Wno-error=maybe-uninitialized
+configure:5823: /usr/bin/gcc -std=gnu99 -c  -Werror -Wno-error=maybe-uninitialized  conftest.c 1>&5
+configure:5851: checking whether the C compiler supports -Wno-error=deprecated-declarations
+configure:5874: /usr/bin/gcc -std=gnu99 -c  -Werror -Wno-error=deprecated-declarations  conftest.c 1>&5
+configure:5902: checking whether the C compiler supports -Wno-error=array-bounds
+configure:5925: /usr/bin/gcc -std=gnu99 -c  -Werror -Wno-error=array-bounds  conftest.c 1>&5
+configure:6118: checking whether the C++ compiler supports -Wc++11-compat-pedantic
+configure:6141: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wc++11-compat-pedantic  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wc++11-compat-pedantic'
+configure: failed program was:
+#line 6134 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6169: checking whether the C++ compiler supports -Wc++14-compat
+configure:6192: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wc++14-compat  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wc++14-compat'
+configure: failed program was:
+#line 6185 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6220: checking whether the C++ compiler supports -Wc++14-compat-pedantic
+configure:6243: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wc++14-compat-pedantic  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wc++14-compat-pedantic'
+configure: failed program was:
+#line 6236 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6271: checking whether the C++ compiler supports -Wc++1z-compat
+configure:6294: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wc++1z-compat  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wc++1z-compat'
+configure: failed program was:
+#line 6287 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6322: checking whether the C++ compiler supports -Wclass-varargs
+configure:6345: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wclass-varargs  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wclass-varargs'
+configure: failed program was:
+#line 6338 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6373: checking whether the C++ compiler supports -Wimplicit-fallthrough
+configure:6396: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wimplicit-fallthrough  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wimplicit-fallthrough'
+configure: failed program was:
+#line 6389 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6424: checking whether the C++ compiler supports -Wloop-analysis
+configure:6447: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wloop-analysis  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wloop-analysis'
+configure: failed program was:
+#line 6440 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6530: checking whether the C++ compiler supports -Wstring-conversion
+configure:6553: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wstring-conversion  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wstring-conversion'
+configure: failed program was:
+#line 6546 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6581: checking whether the C++ compiler supports -Wthread-safety
+configure:6604: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wthread-safety  conftest.C 1>&5
+g++: error: unrecognized command line option '-Wthread-safety'
+configure: failed program was:
+#line 6597 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6639: checking whether the C++ compiler supports -Wno-inline-new-delete
+configure:6662: /usr/bin/g++ -std=gnu++11 -c  -Werror -Winline-new-delete  conftest.C 1>&5
+g++: error: unrecognized command line option '-Winline-new-delete'
+configure: failed program was:
+#line 6655 "configure"
+#include "confdefs.h"
+
+int main() {
+return(0);
+; return 0; }
+configure:6697: checking whether the C++ compiler supports -Wno-error=maybe-uninitialized
+configure:6720: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wno-error=maybe-uninitialized  conftest.C 1>&5
+configure:6748: checking whether the C++ compiler supports -Wno-error=deprecated-declarations
+configure:6771: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wno-error=deprecated-declarations  conftest.C 1>&5
+configure:6799: checking whether the C++ compiler supports -Wno-error=array-bounds
+configure:6822: /usr/bin/g++ -std=gnu++11 -c  -Werror -Wno-error=array-bounds  conftest.C 1>&5
+configure:6972: checking for 64-bit OS
+configure:6981: /usr/bin/gcc -std=gnu99 -c   conftest.c 1>&5
+configure:7756: checking whether the C++ compiler (/usr/bin/g++ -std=gnu++11  -fno-rtti  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id) actually is a C++ compiler
+configure:7775: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id conftest.C  1>&5
+configure:8018: checking for ANSI C header files
+configure:8031: /usr/bin/gcc -std=gnu99 -E  conftest.c >/dev/null 2>conftest.out
+configure:8098: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c  1>&5
+configure: In function 'main':
+configure:8093:1: warning: implicit declaration of function 'exit' [-Wimplicit-function-declaration]
+configure:8093:67: warning: incompatible implicit declaration of built-in function 'exit' [enabled by default]
+configure:8094:1: warning: incompatible implicit declaration of built-in function 'exit' [enabled by default]
+configure:8125: checking for working const
+configure:8179: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8203: checking for mode_t
+configure:8239: checking for off_t
+configure:8275: checking for pid_t
+configure:8311: checking for size_t
+configure:8361: checking for ssize_t
+configure:8374: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8403: checking for endian.h
+configure:8416: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8459: checking for machine/endian.h
+configure:8472: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8466:28: fatal error: machine/endian.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 8464 "configure"
+#include "confdefs.h"
+#include <sys/types.h>
+#include <machine/endian.h>
+int main() {
+
+; return 0; }
+configure:8515: checking for sys/isa_defs.h
+configure:8528: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8522:26: fatal error: sys/isa_defs.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 8520 "configure"
+#include "confdefs.h"
+
+#include <sys/isa_defs.h>
+int main() {
+
+; return 0; }
+configure:8585: checking whether 64-bits std::atomic requires -latomic
+configure:8598: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti -fno-exceptions -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.C  1>&5
+configure:8693: checking for dirent.h that defines DIR
+configure:8706: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8734: checking for opendir in -ldir
+configure:8753: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldir   1>&5
+/home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold/ld: error: cannot find -ldir
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 8742 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char opendir();
+
+int main() {
+opendir()
+; return 0; }
+configure:8828: checking for sys/byteorder.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8835:27: fatal error: sys/byteorder.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 8833 "configure"
+#include "confdefs.h"
+
+#include <sys/byteorder.h>
+int main() {
+
+; return 0; }
+configure:8828: checking for compat.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8835:20: fatal error: compat.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 8833 "configure"
+#include "confdefs.h"
+
+#include <compat.h>
+int main() {
+
+; return 0; }
+configure:8828: checking for getopt.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for sys/bitypes.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for memory.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for unistd.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for gnu/libc-version.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for nl_types.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for malloc.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8828: checking for X11/XKBlib.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8835:24: fatal error: X11/XKBlib.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 8833 "configure"
+#include "confdefs.h"
+
+#include <X11/XKBlib.h>
+int main() {
+
+; return 0; }
+configure:8828: checking for io.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8835:16: fatal error: io.h: No such file or directory
+compilation terminated.
+configure: failed program was:
+#line 8833 "configure"
+#include "confdefs.h"
+
+#include <io.h>
+int main() {
+
+; return 0; }
+configure:8828: checking for cpuid.h
+configure:8841: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8876: checking for sys/statvfs.h
+configure:8889: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8876: checking for sys/statfs.h
+configure:8889: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8876: checking for sys/vfs.h
+configure:8889: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8876: checking for sys/mount.h
+configure:8889: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8923: checking for sys/quota.h
+configure:8936: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:8969: checking for linux/quota.h
+configure:8982: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:9078: checking for sys/cdefs.h
+configure:9091: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:9141: checking for linux/perf_event.h
+configure:9154: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno   conftest.c 1>&5
+configure:9169: checking for perf_event_open system call
+configure:9181: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno   conftest.c 1>&5
+configure:9213: checking for gethostbyname_r in -lc_r
+configure:9232: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lc_r   1>&5
+/home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold/ld: error: cannot find -lc_r
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 9221 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char gethostbyname_r();
+
+int main() {
+gethostbyname_r()
+; return 0; }
+configure:9269: checking for library containing dlopen
+configure:9287: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c  1>&5
+/tmp/ccu2xkYK.o:conftest.c:function main: error: undefined reference to 'dlopen'
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 9276 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char dlopen();
+
+int main() {
+dlopen()
+; return 0; }
+configure:9309: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl   1>&5
+configure:9327: checking for dlfcn.h
+configure:9340: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno  conftest.c 1>&5
+configure:9426: checking for socket in -lsocket
+configure:9445: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lsocket  -ldl  1>&5
+/home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold/ld: error: cannot find -lsocket
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 9434 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char socket();
+
+int main() {
+socket()
+; return 0; }
+configure:9482: checking for pthread_create in -lpthreads
+configure:9501: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lpthreads  -ldl  1>&5
+/home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold/ld: error: cannot find -lpthreads
+/tmp/ccjWn2rP.o:conftest.c:function main: error: undefined reference to 'pthread_create'
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 9490 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char pthread_create();
+
+int main() {
+pthread_create()
+; return 0; }
+configure:9520: checking for pthread_create in -lpthread
+configure:9539: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno   -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lpthread  -ldl  1>&5
+configure:9670: checking whether /usr/bin/gcc -std=gnu99 accepts -pthread
+configure:9765: checking whether /usr/bin/gcc -std=gnu99 needs -traditional
+configure:9811: checking for 8-bit clean memcmp
+configure:9829: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
+configure:9821:1: warning: return type defaults to 'int' [enabled by default]
+configure: In function 'main':
+configure:9824:3: warning: implicit declaration of function 'exit' [-Wimplicit-function-declaration]
+configure:9824:3: warning: incompatible implicit declaration of built-in function 'exit' [enabled by default]
+configure:9824:3: warning: implicit declaration of function 'memcmp' [-Wimplicit-function-declaration]
+configure:9849: checking for getc_unlocked
+configure:9881: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
+configure:9849: checking for _getc_nolock
+configure:9881: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
+/tmp/ccO8nKT2.o:conftest.c:function main: error: undefined reference to '_getc_nolock'
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 9854 "configure"
+#define _getc_nolock innocuous__getc_nolock
+#include "confdefs.h"
+#undef _getc_nolock
+/* System header to define __stub macros and hopefully few prototypes,
+    which can conflict with char _getc_nolock(); below.  */
+#define _getc_nolock innocuous__getc_nolock
+#include <assert.h>
+#undef _getc_nolock
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char _getc_nolock();
+
+int main() {
+
+/* The GNU C library defines this for functions which it implements
+    to always fail with ENOSYS.  Some functions are actually named
+    something starting with __ and the normal name is an alias.  */
+#if defined (__stub__getc_nolock) || defined (__stub____getc_nolock)
+choke me
+#else
+_getc_nolock();
+#endif
+
+; return 0; }
+configure:9849: checking for gmtime_r
+configure:9881: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
+configure:9849: checking for localtime_r
+configure:9881: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl  1>&5
+configure:9910: checking for clock_gettime(CLOCK_MONOTONIC)
+configure:9926: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -ldl   1>&5
+configure:9958: checking for sin in -lm
+configure:9977: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm  -ldl  1>&5
+configure:9970:6: warning: conflicting types for built-in function 'sin' [enabled by default]
+configure:10008: checking for __sincos in -lm
+configure:10027: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm  -lm -ldl  1>&5
+/tmp/ccEbdsae.o:conftest.c:function main: error: undefined reference to '__sincos'
+collect2: error: ld returned 1 exit status
+configure: failed program was:
+#line 10016 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char __sincos();
+
+int main() {
+__sincos()
+; return 0; }
+configure:10065: checking for wcrtomb
+configure:10077: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti -fno-exceptions -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.C -lm -ldl  1>&5
+configure:10100: checking for mbrtowc
+configure:10112: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti -fno-exceptions -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.C -lm -ldl  1>&5
+configure:10144: checking for res_ninit()
+configure:10167: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm -ldl  1>&5
+configure:10195: checking for nl_langinfo and CODESET
+configure:10207: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm -ldl  1>&5
+configure:10243: checking for an implementation of va_copy()
+configure:10264: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno -pthread  conftest.c 1>&5
+configure:10280: checking whether va_list can be copied by value
+configure:10301: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno -pthread  conftest.c 1>&5
+configure: In function 'f':
+configure:10291:19: error: incompatible types when assigning to type 'va_list' from type 'struct __va_list_tag *'
+configure: failed program was:
+#line 10285 "configure"
+#include "confdefs.h"
+#include <stdarg.h>
+                     #include <stdlib.h>
+        void f (int i, ...) {
+            va_list args1, args2;
+            va_start (args1, i);
+            args2 = args1;
+            if (va_arg (args2, int) != 42 || va_arg (args1, int) != 42)
+                exit (1);
+            va_end (args1); va_end (args2);
+        }
+int main() {
+f(0, 42); return 0
+; return 0; }
+configure:10397: checking whether the C++ "using" keyword resolves ambiguity
+configure:10418: /usr/bin/g++ -std=gnu++11 -c  -fno-rtti -fno-exceptions -fno-math-errno -pthread  conftest.C 1>&5
+configure:10442: checking for C++ dynamic_cast to void*
+configure:10469: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti -fno-exceptions -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.C -lm -ldl  1>&5
+configure:10502: checking for __thread keyword for TLS variables
+configure:10514: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti -fno-exceptions -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold -fPIC -shared -Wl,-z,defs  conftest.C -lm -ldl  1>&5
+configure:10552: checking for __attribute__((always_inline))
+configure:10564: /usr/bin/g++ -std=gnu++11 -c  -fno-rtti -fno-exceptions -fno-math-errno -pthread  conftest.C 1>&5
+configure:10588: checking for LC_MESSAGES
+configure:10600: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno -pthread  conftest.c 1>&5
+configure:10626: checking for localeconv
+configure:10658: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm -ldl  1>&5
+configure:10798: checking NSPR selection
+configure:11123: checking for gzread in -lz
+configure:11142: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lz  -lm -ldl  1>&5
+configure:11177: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno -pthread  conftest.c 1>&5
+configure:11427: checking for valid optimization flags
+configure:11438: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno -pthread -freorder-blocks -O3  conftest.c 1>&5
+configure:12222: checking for __cxa_demangle
+configure:12257: /usr/bin/g++ -std=gnu++11 -o conftest  -fno-rtti -fno-exceptions -fno-math-errno -pthread  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.C -lm -ldl  1>&5
+configure:12318: checking for -pipe support
+configure:12332: checking whether C compiler supports -fprofile-generate
+configure:12341: /usr/bin/gcc -std=gnu99 -c  -fno-math-errno -pthread -pipe -fprofile-generate -fprofile-correction  conftest.c 1>&5
+configure:12376: checking for tm_zone tm_gmtoff in struct tm
+configure:12388: /usr/bin/g++ -std=gnu++11 -c  -fno-rtti -fno-exceptions -fno-math-errno -pthread -pipe  conftest.C 1>&5
+configure:12430: checking what kind of list files are supported by the linker
+configure:12435: /usr/bin/gcc -std=gnu99 -o conftest.o -c  -fno-math-errno -pthread -pipe  conftest.c 1>&5
+configure:12437: /usr/bin/gcc -std=gnu99 -o conftest -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.list -lm -ldl  1>&5
+configure:12463: checking what kind of ordering can be done with the linker
+configure:12478: /usr/bin/gcc -std=gnu99 -o conftest  -fno-math-errno -pthread -pipe  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold -Wl,--section-ordering-file,conftest.order conftest.c -lm -ldl  1>&5
+configure:12794: checking for posix_fadvise
+configure:12826: /usr/bin/gcc -std=gnu99 -o conftest -Wall -Wempty-body -Wignored-qualifiers -Wpointer-arith -Wsign-compare -Wtype-limits -Wunreachable-code -Wno-error=maybe-uninitialized -Wno-error=deprecated-declarations -Wno-error=array-bounds -fno-math-errno -pthread -pipe  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm -ldl  1>&5
+configure:12794: checking for posix_fallocate
+configure:12826: /usr/bin/gcc -std=gnu99 -o conftest -Wall -Wempty-body -Wignored-qualifiers -Wpointer-arith -Wsign-compare -Wtype-limits -Wunreachable-code -Wno-error=maybe-uninitialized -Wno-error=deprecated-declarations -Wno-error=array-bounds -fno-math-errno -pthread -pipe  -lpthread  -Wl,-z,noexecstack -Wl,-z,text -Wl,--build-id -B /home/cin_chalic/Documents/Project/github/cstipkovic/spidermonkey-research/js/src/build_OPT.OBJ/build/unix/gold conftest.c -lm -ldl  1>&5
+configure: error: Cannot find the ICU directory
