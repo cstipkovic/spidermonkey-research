@@ -507,7 +507,7 @@ static bool
 WasmIsSupported(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
-    args.rval().setBoolean(wasm::HasCompilerSupport(cx) && cx->runtime()->options().wasm());
+    args.rval().setBoolean(wasm::HasCompilerSupport(cx) && cx->options().wasm());
     return true;
 }
 
@@ -517,10 +517,8 @@ WasmTextToBinary(JSContext* cx, unsigned argc, Value* vp)
     CallArgs args = CallArgsFromVp(argc, vp);
     RootedObject callee(cx, &args.callee());
 
-    if (args.length() != 1) {
-        ReportUsageError(cx, callee, "Wrong number of arguments");
+    if (!args.requireAtLeast(cx, "wasmTextToBinary", 1))
         return false;
-    }
 
     if (!args[0].isString()) {
         ReportUsageError(cx, callee, "First argument must be a String");
@@ -531,9 +529,28 @@ WasmTextToBinary(JSContext* cx, unsigned argc, Value* vp)
     if (!twoByteChars.initTwoByte(cx, args[0].toString()))
         return false;
 
+    bool newFormat = false;
+    if (args.hasDefined(1)) {
+        if (!args[1].isString()) {
+            ReportUsageError(cx, callee, "Second argument, if present, must be a String");
+            return false;
+        }
+
+        JSLinearString* str = args[1].toString()->ensureLinear(cx);
+        if (!str)
+            return false;
+
+        if (!StringEqualsAscii(str, "new-format")) {
+            ReportUsageError(cx, callee, "Unknown string value for second argument");
+            return false;
+        }
+
+        newFormat = true;
+    }
+
     wasm::Bytes bytes;
     UniqueChars error;
-    if (!wasm::TextToBinary(twoByteChars.twoByteChars(), &bytes, &error)) {
+    if (!wasm::TextToBinary(twoByteChars.twoByteChars(), newFormat, &bytes, &error)) {
         JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_TEXT_FAIL,
                              error.get() ? error.get() : "out of memory");
         return false;
@@ -552,7 +569,7 @@ WasmTextToBinary(JSContext* cx, unsigned argc, Value* vp)
 static bool
 WasmBinaryToText(JSContext* cx, unsigned argc, Value* vp)
 {
-    MOZ_ASSERT(cx->runtime()->options().wasm());
+    MOZ_ASSERT(cx->options().wasm());
     CallArgs args = CallArgsFromVp(argc, vp);
 
     if (!args.get(0).isObject() || !args.get(0).toObject().is<TypedArrayObject>()) {
@@ -720,7 +737,7 @@ GCZeal(JSContext* cx, unsigned argc, Value* vp)
             return false;
     }
 
-    JS_SetGCZeal(cx->runtime(), (uint8_t)zeal, frequency);
+    JS_SetGCZeal(cx, (uint8_t)zeal, frequency);
     args.rval().setUndefined();
     return true;
 }
@@ -1281,9 +1298,6 @@ OOMTest(JSContext* cx, unsigned argc, Value* vp)
         return true;
     }
 
-    MOZ_ASSERT(!cx->isExceptionPending());
-    cx->runtime()->hadOutOfMemory = false;
-
     RootedFunction function(cx, &args[0].toObject().as<JSFunction>());
 
     bool verbose = EnvVarIsDefined("OOM_VERBOSE");
@@ -1303,7 +1317,17 @@ OOMTest(JSContext* cx, unsigned argc, Value* vp)
         threadEnd = threadOption + 1;
     }
 
-    JS_SetGCZeal(cx->runtime(), 0, JS_DEFAULT_ZEAL_FREQ);
+    JSRuntime* rt = cx->runtime();
+    if (rt->runningOOMTest) {
+        JS_ReportError(cx, "Nested call to oomTest() is not allowed.");
+        return false;
+    }
+    rt->runningOOMTest = true;
+
+    MOZ_ASSERT(!cx->isExceptionPending());
+    rt->hadOutOfMemory = false;
+
+    JS_SetGCZeal(cx, 0, JS_DEFAULT_ZEAL_FREQ);
 
     for (unsigned thread = threadStart; thread < threadEnd; thread++) {
         if (verbose)
@@ -1358,6 +1382,7 @@ OOMTest(JSContext* cx, unsigned argc, Value* vp)
         }
     }
 
+    rt->runningOOMTest = false;
     args.rval().setUndefined();
     return true;
 }
@@ -1514,7 +1539,7 @@ DumpHeap(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
-    js::DumpHeap(JS_GetRuntime(cx), dumpFile ? dumpFile : stdout, nurseryBehaviour);
+    js::DumpHeap(cx, dumpFile ? dumpFile : stdout, nurseryBehaviour);
 
     if (dumpFile)
         fclose(dumpFile);
@@ -1977,7 +2002,7 @@ SetJitCompilerOption(JSContext* cx, unsigned argc, Value* vp)
         }
     }
 
-    JS_SetGlobalJitCompilerOption(cx->runtime(), opt, uint32_t(number));
+    JS_SetGlobalJitCompilerOption(cx, opt, uint32_t(number));
 
     args.rval().setUndefined();
     return true;
@@ -1995,7 +2020,7 @@ GetJitCompilerOptions(JSContext* cx, unsigned argc, Value* vp)
 
 #define JIT_COMPILER_MATCH(key, string)                                \
     opt = JSJITCOMPILER_ ## key;                                       \
-    value.setInt32(JS_GetGlobalJitCompilerOption(cx->runtime(), opt)); \
+    value.setInt32(JS_GetGlobalJitCompilerOption(cx, opt));            \
     if (!JS_SetProperty(cx, info, string, value))                      \
         return false;
 
@@ -3341,13 +3366,13 @@ SetGCCallback(JSContext* cx, unsigned argc, Value* vp)
     }
 
     if (gcCallback::prevMajorGC) {
-        JS_SetGCCallback(cx->runtime(), nullptr, nullptr);
+        JS_SetGCCallback(cx, nullptr, nullptr);
         js_delete<gcCallback::MajorGC>(gcCallback::prevMajorGC);
         gcCallback::prevMajorGC = nullptr;
     }
 
     if (gcCallback::prevMinorGC) {
-        JS_SetGCCallback(cx->runtime(), nullptr, nullptr);
+        JS_SetGCCallback(cx, nullptr, nullptr);
         js_delete<gcCallback::MinorGC>(gcCallback::prevMinorGC);
         gcCallback::prevMinorGC = nullptr;
     }
@@ -3361,7 +3386,7 @@ SetGCCallback(JSContext* cx, unsigned argc, Value* vp)
 
         info->phases = phases;
         info->active = true;
-        JS_SetGCCallback(cx->runtime(), gcCallback::minorGC, info);
+        JS_SetGCCallback(cx, gcCallback::minorGC, info);
     } else if (strcmp(action.ptr(), "majorGC") == 0) {
         if (!JS_GetProperty(cx, opts, "depth", &v))
             return false;
@@ -3383,7 +3408,7 @@ SetGCCallback(JSContext* cx, unsigned argc, Value* vp)
 
         info->phases = phases;
         info->depth = depth;
-        JS_SetGCCallback(cx->runtime(), gcCallback::majorGC, info);
+        JS_SetGCCallback(cx, gcCallback::majorGC, info);
     } else {
         JS_ReportError(cx, "Unknown GC callback action");
         return false;

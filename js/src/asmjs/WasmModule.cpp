@@ -75,10 +75,10 @@ LinkData::SymbolicLinkArray::serialize(uint8_t* cursor) const
 }
 
 const uint8_t*
-LinkData::SymbolicLinkArray::deserialize(ExclusiveContext* cx, const uint8_t* cursor)
+LinkData::SymbolicLinkArray::deserialize(const uint8_t* cursor)
 {
     for (Uint32Vector& offsets : *this) {
-        cursor = DeserializePodVector(cx, cursor, &offsets);
+        cursor = DeserializePodVector(cursor, &offsets);
         if (!cursor)
             return nullptr;
     }
@@ -110,10 +110,10 @@ LinkData::FuncTable::serialize(uint8_t* cursor) const
 }
 
 const uint8_t*
-LinkData::FuncTable::deserialize(ExclusiveContext* cx, const uint8_t* cursor)
+LinkData::FuncTable::deserialize(const uint8_t* cursor)
 {
     (cursor = ReadBytes(cursor, &globalDataOffset, sizeof(globalDataOffset))) &&
-    (cursor = DeserializePodVector(cx, cursor, &elemOffsets));
+    (cursor = DeserializePodVector(cursor, &elemOffsets));
     return cursor;
 }
 
@@ -143,12 +143,12 @@ LinkData::serialize(uint8_t* cursor) const
 }
 
 const uint8_t*
-LinkData::deserialize(ExclusiveContext* cx, const uint8_t* cursor)
+LinkData::deserialize(const uint8_t* cursor)
 {
     (cursor = ReadBytes(cursor, &pod(), sizeof(pod()))) &&
-    (cursor = DeserializePodVector(cx, cursor, &internalLinks)) &&
-    (cursor = symbolicLinks.deserialize(cx, cursor)) &&
-    (cursor = DeserializeVector(cx, cursor, &funcTables));
+    (cursor = DeserializePodVector(cursor, &internalLinks)) &&
+    (cursor = symbolicLinks.deserialize(cursor)) &&
+    (cursor = DeserializeVector(cursor, &funcTables));
     return cursor;
 }
 
@@ -176,10 +176,10 @@ ImportName::serialize(uint8_t* cursor) const
 }
 
 const uint8_t*
-ImportName::deserialize(ExclusiveContext* cx, const uint8_t* cursor)
+ImportName::deserialize(const uint8_t* cursor)
 {
-    (cursor = module.deserialize(cx, cursor)) &&
-    (cursor = func.deserialize(cx, cursor));
+    (cursor = module.deserialize(cursor)) &&
+    (cursor = func.deserialize(cursor));
     return cursor;
 }
 
@@ -206,10 +206,10 @@ ExportMap::serialize(uint8_t* cursor) const
 }
 
 const uint8_t*
-ExportMap::deserialize(ExclusiveContext* cx, const uint8_t* cursor)
+ExportMap::deserialize(const uint8_t* cursor)
 {
-    (cursor = DeserializeVector(cx, cursor, &fieldNames)) &&
-    (cursor = DeserializePodVector(cx, cursor, &fieldsToExports));
+    (cursor = DeserializeVector(cursor, &fieldNames)) &&
+    (cursor = DeserializePodVector(cursor, &fieldsToExports));
     return cursor;
 }
 
@@ -246,31 +246,30 @@ Module::serialize(uint8_t* cursor) const
 }
 
 /* static */ const uint8_t*
-Module::deserialize(ExclusiveContext* cx, const uint8_t* cursor, UniquePtr<Module>* module,
-                    Metadata* maybeMetadata)
+Module::deserialize(const uint8_t* cursor, UniquePtr<Module>* module, Metadata* maybeMetadata)
 {
     Bytes code;
-    cursor = DeserializePodVector(cx, cursor, &code);
+    cursor = DeserializePodVector(cursor, &code);
     if (!cursor)
         return nullptr;
 
     LinkData linkData;
-    cursor = linkData.deserialize(cx, cursor);
+    cursor = linkData.deserialize(cursor);
     if (!cursor)
         return nullptr;
 
     ImportNameVector importNames;
-    cursor = DeserializeVector(cx, cursor, &importNames);
+    cursor = DeserializeVector(cursor, &importNames);
     if (!cursor)
         return nullptr;
 
     ExportMap exportMap;
-    cursor = exportMap.deserialize(cx, cursor);
+    cursor = exportMap.deserialize(cursor);
     if (!cursor)
         return nullptr;
 
     DataSegmentVector dataSegments;
-    cursor = DeserializePodVector(cx, cursor, &dataSegments);
+    cursor = DeserializePodVector(cursor, &dataSegments);
     if (!cursor)
         return nullptr;
 
@@ -278,29 +277,29 @@ Module::deserialize(ExclusiveContext* cx, const uint8_t* cursor, UniquePtr<Modul
     if (maybeMetadata) {
         metadata = maybeMetadata;
     } else {
-        metadata = cx->new_<Metadata>();
+        metadata = js_new<Metadata>();
         if (!metadata)
             return nullptr;
     }
-    cursor = metadata->deserialize(cx, cursor);
+    cursor = metadata->deserialize(cursor);
     if (!cursor)
         return nullptr;
     MOZ_RELEASE_ASSERT(!!maybeMetadata == metadata->isAsmJS());
 
-    MutableBytes bytecode = cx->new_<ShareableBytes>();
+    MutableBytes bytecode = js_new<ShareableBytes>();
     if (!bytecode)
         return nullptr;
-    cursor = DeserializePodVector(cx, cursor, &bytecode->bytes);
+    cursor = DeserializePodVector(cursor, &bytecode->bytes);
     if (!cursor)
         return nullptr;
 
-    *module = cx->make_unique<Module>(Move(code),
-                                      Move(linkData),
-                                      Move(importNames),
-                                      Move(exportMap),
-                                      Move(dataSegments),
-                                      *metadata,
-                                      *bytecode);
+    *module = js::MakeUnique<Module>(Move(code),
+                                     Move(linkData),
+                                     Move(importNames),
+                                     Move(exportMap),
+                                     Move(dataSegments),
+                                     *metadata,
+                                     *bytecode);
     if (!*module)
         return nullptr;
 
@@ -327,30 +326,48 @@ Module::addSizeOfMisc(MallocSizeOf mallocSizeOf,
 bool
 Module::instantiate(JSContext* cx,
                     Handle<FunctionVector> funcImports,
-                    Handle<ArrayBufferObjectMaybeShared*> asmJSHeap,
-                    MutableHandleWasmInstanceObject instanceObj) const
+                    HandleArrayBufferObjectMaybeShared asmJSBuffer,
+                    HandleWasmInstanceObject instanceObj) const
 {
     MOZ_ASSERT(funcImports.length() == metadata_->imports.length());
-    MOZ_ASSERT_IF(asmJSHeap, metadata_->isAsmJS());
 
-    // asm.js module instantiation supplies its own heap, but for wasm, create
-    // and initialize the heap if one is requested.
+    // asm.js module instantiation supplies its own buffer, but for wasm, create
+    // and initialize the buffer if one is requested. Either way, the buffer is
+    // wrapped in a WebAssembly.Memory object which is what the Instance stores.
 
-    Rooted<ArrayBufferObjectMaybeShared*> heap(cx, asmJSHeap);
-    if (metadata_->usesHeap() && !heap) {
-        MOZ_ASSERT(!metadata_->isAsmJS());
-        bool signalsForOOB = metadata_->compileArgs.useSignalHandlersForOOB;
-        heap = ArrayBufferObject::createForWasm(cx, metadata_->initialHeapLength, signalsForOOB);
-        if (!heap)
+    RootedWasmMemoryObject memory(cx);
+    uint8_t* memoryBase = nullptr;
+    uint32_t memoryLength = 0;
+    RootedArrayBufferObjectMaybeShared buffer(cx);
+    if (metadata_->usesMemory()) {
+        if (metadata_->isAsmJS()) {
+            MOZ_ASSERT(asmJSBuffer);
+            buffer = asmJSBuffer;
+        } else {
+            buffer = ArrayBufferObject::createForWasm(cx, metadata_->minMemoryLength,
+                                                      metadata_->assumptions.usesSignal.forOOB);
+            if (!buffer)
+                return false;
+        }
+
+        RootedObject proto(cx);
+        if (metadata_->assumptions.newFormat)
+            proto = &cx->global()->getPrototype(JSProto_WasmMemory).toObject();
+
+        memory = WasmMemoryObject::create(cx, buffer, proto);
+        if (!memory)
             return false;
+
+        memoryBase = buffer->dataPointerEither().unwrap(/* memcpy and code patching */);
+        memoryLength = buffer->byteLength();
+
+        const uint8_t* bytecode = bytecode_->begin();
+        for (const DataSegment& seg : dataSegments_)
+            memcpy(memoryBase + seg.memoryOffset, bytecode + seg.bytecodeOffset, seg.length);
+    } else {
+        MOZ_ASSERT(!asmJSBuffer);
+        MOZ_ASSERT(dataSegments_.empty());
     }
-
-    uint8_t* memoryBase = heap ? heap->dataPointerEither().unwrap(/* code patching */) : nullptr;
-    uint32_t memoryLength = heap ? heap->byteLength() : 0;
-
-    const uint8_t* bytecode = bytecode_->begin();
-    for (const DataSegment& seg : dataSegments_)
-        memcpy(memoryBase + seg.memoryOffset, bytecode + seg.bytecodeOffset, seg.length);
 
     // Create a new, specialized CodeSegment for the new Instance (for now).
 
@@ -380,5 +397,5 @@ Module::instantiate(JSContext* cx,
     }
 
     return Instance::create(cx, Move(cs), *metadata_, maybeBytecode, Move(typedFuncTables),
-                            heap, funcImports, exportMap_, instanceObj);
+                            memory, funcImports, exportMap_, instanceObj);
 }

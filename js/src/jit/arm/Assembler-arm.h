@@ -156,7 +156,6 @@ static MOZ_CONSTEXPR_VAR Register AsmJSIonExitRegCallee = r4;
 static MOZ_CONSTEXPR_VAR Register AsmJSIonExitRegE0 = r0;
 static MOZ_CONSTEXPR_VAR Register AsmJSIonExitRegE1 = r1;
 static MOZ_CONSTEXPR_VAR Register AsmJSIonExitRegE2 = r2;
-static MOZ_CONSTEXPR_VAR Register AsmJSIonExitRegE3 = r3;
 
 // Registers used in the GenerateFFIIonExit Disable Activation block.
 // None of these may be the second scratch register (lr).
@@ -282,7 +281,6 @@ enum Index {
     // 1 << 21 | 0 << 24 encodes dtrt.
 };
 
-// Seriously, wtf arm
 enum IsImmOp2_ {
     IsImmOp2    = 1 << 25,
     IsNotImmOp2 = 0 << 25
@@ -1082,7 +1080,6 @@ class Operand
     Tag_ Tag : 3;
     uint32_t reg : 5;
     int32_t offset;
-    uint32_t data;
 
   public:
     explicit Operand(Register reg_)
@@ -1753,6 +1750,9 @@ class Assembler : public AssemblerShared
 
     static bool SupportsFloatingPoint() {
         return HasVFP();
+    }
+    static bool SupportsUnalignedAccesses() {
+        return HasARMv7();
     }
     static bool SupportsSimd() {
         return js::jit::SupportsSimd;

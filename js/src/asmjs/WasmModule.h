@@ -41,6 +41,7 @@ struct LinkDataCacheablePod
     uint32_t globalDataLength;
     uint32_t interruptOffset;
     uint32_t outOfBoundsOffset;
+    uint32_t unalignedAccessOffset;
 
     LinkDataCacheablePod() { mozilla::PodZero(this); }
 };
@@ -55,9 +56,9 @@ struct LinkData : LinkDataCacheablePod
             RawPointer,
             CodeLabel,
             InstructionImmediate
-        };
-        uint32_t patchAtOffset;
-        uint32_t targetOffset;
+        };	
+        MOZ_INIT_OUTSIDE_CTOR uint32_t patchAtOffset;
+        MOZ_INIT_OUTSIDE_CTOR uint32_t targetOffset;
 
         InternalLink() = default;
         explicit InternalLink(Kind kind);
@@ -74,9 +75,6 @@ struct LinkData : LinkDataCacheablePod
         Uint32Vector elemOffsets;
         FuncTable(uint32_t globalDataOffset, Uint32Vector&& elemOffsets)
           : globalDataOffset(globalDataOffset), elemOffsets(Move(elemOffsets))
-        {}
-        FuncTable(FuncTable&& rhs)
-          : globalDataOffset(rhs.globalDataOffset), elemOffsets(Move(rhs.elemOffsets))
         {}
         FuncTable() = default;
         WASM_DECLARE_SERIALIZABLE(FuncTable)
@@ -193,15 +191,14 @@ class Module
 
     bool instantiate(JSContext* cx,
                      Handle<FunctionVector> funcImports,
-                     Handle<ArrayBufferObjectMaybeShared*> asmJSHeap,
-                     MutableHandle<WasmInstanceObject*> instanceObj) const;
+                     HandleArrayBufferObjectMaybeShared asmJSBuffer,
+                     HandleWasmInstanceObject instanceObj) const;
 
     // Structured clone support:
 
     size_t serializedSize() const;
     uint8_t* serialize(uint8_t* cursor) const;
-    static const uint8_t* deserialize(ExclusiveContext* cx, const uint8_t* cursor,
-                                      UniquePtr<Module>* module,
+    static const uint8_t* deserialize(const uint8_t* cursor, UniquePtr<Module>* module,
                                       Metadata* maybeMetadata = nullptr);
 
     // about:memory reporting:

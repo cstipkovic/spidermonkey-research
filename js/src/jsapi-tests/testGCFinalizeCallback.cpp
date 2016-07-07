@@ -11,11 +11,11 @@ static bool IsCompartmentGCBuffer[BufferSize];
 
 BEGIN_TEST(testGCFinalizeCallback)
 {
-    JS_SetGCParameter(rt, JSGC_MODE, JSGC_MODE_INCREMENTAL);
+    JS_SetGCParameter(cx, JSGC_MODE, JSGC_MODE_INCREMENTAL);
 
     /* Full GC, non-incremental. */
     FinalizeCalls = 0;
-    JS_GC(rt);
+    JS_GC(cx);
     CHECK(rt->gc.isFullGc());
     CHECK(checkSingleGroup());
     CHECK(checkFinalizeStatus());
@@ -99,7 +99,7 @@ BEGIN_TEST(testGCFinalizeCallback)
     /* Full GC with reset due to new compartment, becoming compartment GC. */
 
     FinalizeCalls = 0;
-    JS_SetGCZeal(rt, 9, 1000000);
+    JS_SetGCZeal(cx, 9, 1000000);
     JS::PrepareForFullGC(rt);
     js::SliceBudget budget(js::WorkBudget(1));
     rt->gc.startDebugGC(GC_NORMAL, budget);
@@ -120,7 +120,7 @@ BEGIN_TEST(testGCFinalizeCallback)
         CHECK(!IsCompartmentGCBuffer[i]);
     CHECK(IsCompartmentGCBuffer[FinalizeCalls - 1]);
 
-    JS_SetGCZeal(rt, 0, 0);
+    JS_SetGCZeal(cx, 0, 0);
 
 #endif
 
@@ -147,13 +147,13 @@ virtual bool init() override
     if (!JSAPITest::init())
         return false;
 
-    JS_AddFinalizeCallback(rt, FinalizeCallback, nullptr);
+    JS_AddFinalizeCallback(cx, FinalizeCallback, nullptr);
     return true;
 }
 
 virtual void uninit() override
 {
-    JS_RemoveFinalizeCallback(rt, FinalizeCallback);
+    JS_RemoveFinalizeCallback(cx, FinalizeCallback);
     JSAPITest::uninit();
 }
 

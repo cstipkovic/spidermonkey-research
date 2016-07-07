@@ -1026,9 +1026,15 @@ class MInstruction
     // protected, and delegates to the TempObject new operator. Thus, the
     // following code prevents calls to "new(alloc) MFoo" outside the MFoo
     // members.
-    template <typename... Args>
-    inline void* operator new(size_t nbytes, Args&&... args) {
-        return TempObject::operator new(nbytes, mozilla::Forward<Args>(args)...);
+    inline void* operator new(size_t nbytes, TempAllocator::Fallible view) throw() {
+        return TempObject::operator new(nbytes, view);
+    }
+    inline void* operator new(size_t nbytes, TempAllocator& alloc) {
+        return TempObject::operator new(nbytes, alloc);
+    }
+    template <class T>
+    inline void* operator new(size_t nbytes, T* pos) {
+        return TempObject::operator new(nbytes, pos);
     }
 
   public:
@@ -2913,6 +2919,7 @@ class MGoto
   public:
     INSTRUCTION_HEADER(Goto)
     static MGoto* New(TempAllocator& alloc, MBasicBlock* target);
+    static MGoto* New(TempAllocator::Fallible alloc, MBasicBlock* target);
 
     // Factory for asm, which may patch the target later.
     static MGoto* NewAsm(TempAllocator& alloc);
@@ -3279,7 +3286,7 @@ class MNewObject
     public NoTypePolicy::Data
 {
   public:
-    enum Mode { ObjectLiteral, ObjectCreate };
+    enum Mode { ObjectLiteral, ObjectCreate, TypedArray };
 
   private:
     gc::InitialHeap initialHeap_;
@@ -3822,6 +3829,35 @@ class MInitElemGetterSetter
 
 };
 
+// WrappedFunction wraps a JSFunction so it can safely be used off-thread.
+// In particular, a function's flags can be modified on the main thread as
+// functions are relazified and delazified, so we must be careful not to access
+// these flags off-thread.
+class WrappedFunction : public TempObject
+{
+    CompilerFunction fun_;
+    uint16_t nargs_;
+    bool isNative_ : 1;
+    bool isConstructor_ : 1;
+    bool isClassConstructor_ : 1;
+    bool isSelfHostedBuiltin_ : 1;
+
+  public:
+    explicit WrappedFunction(JSFunction* fun);
+    size_t nargs() const { return nargs_; }
+    bool isNative() const { return isNative_; }
+    bool isConstructor() const { return isConstructor_; }
+    bool isClassConstructor() const { return isClassConstructor_; }
+    bool isSelfHostedBuiltin() const { return isSelfHostedBuiltin_; }
+
+    // fun->native() and fun->jitInfo() can safely be called off-thread: these
+    // fields never change.
+    JSNative native() const { return fun_->native(); }
+    const JSJitInfo* jitInfo() const { return fun_->jitInfo(); }
+
+    JSFunction* rawJSFunction() const { return fun_; }
+};
+
 class MCall
   : public MVariadicInstruction,
     public CallPolicy::Data
@@ -3834,7 +3870,7 @@ class MCall
 
   protected:
     // Monomorphic cache of single target from TI, or nullptr.
-    CompilerFunction target_;
+    WrappedFunction* target_;
 
     // Original value of argc from the bytecode.
     uint32_t numActualArgs_;
@@ -3844,7 +3880,7 @@ class MCall
 
     bool needsArgCheck_;
 
-    MCall(JSFunction* target, uint32_t numActualArgs, bool construct)
+    MCall(WrappedFunction* target, uint32_t numActualArgs, bool construct)
       : target_(target),
         numActualArgs_(numActualArgs),
         construct_(construct),
@@ -3893,7 +3929,7 @@ class MCall
     }
 
     // For TI-informed monomorphic callsites.
-    JSFunction* getSingleTarget() const {
+    WrappedFunction* getSingleTarget() const {
         return target_;
     }
 
@@ -3937,7 +3973,7 @@ class MCallDOMNative : public MCall
     // isCall() to check for calls and all we really want is to overload a few
     // virtual things from MCall.
   protected:
-    MCallDOMNative(JSFunction* target, uint32_t numActualArgs)
+    MCallDOMNative(WrappedFunction* target, uint32_t numActualArgs)
         : MCall(target, numActualArgs, false)
     {
         MOZ_ASSERT(getJitInfo()->type() != JSJitInfo::InlinableNative);
@@ -3996,9 +4032,9 @@ class MApplyArgs
 {
   protected:
     // Monomorphic cache of single target from TI, or nullptr.
-    CompilerFunction target_;
+    WrappedFunction* target_;
 
-    MApplyArgs(JSFunction* target, MDefinition* fun, MDefinition* argc, MDefinition* self)
+    MApplyArgs(WrappedFunction* target, MDefinition* fun, MDefinition* argc, MDefinition* self)
       : target_(target)
     {
         initOperand(0, fun);
@@ -4013,7 +4049,7 @@ class MApplyArgs
     NAMED_OPERANDS((0, getFunction), (1, getArgc), (2, getThis))
 
     // For TI-informed monomorphic callsites.
-    JSFunction* getSingleTarget() const {
+    WrappedFunction* getSingleTarget() const {
         return target_;
     }
 
@@ -4029,9 +4065,9 @@ class MApplyArray
 {
   protected:
     // Monomorphic cache of single target from TI, or nullptr.
-    CompilerFunction target_;
+    WrappedFunction* target_;
 
-    MApplyArray(JSFunction* target, MDefinition* fun, MDefinition* elements, MDefinition* self)
+    MApplyArray(WrappedFunction* target, MDefinition* fun, MDefinition* elements, MDefinition* self)
       : target_(target)
     {
         initOperand(0, fun);
@@ -4046,7 +4082,7 @@ class MApplyArray
     NAMED_OPERANDS((0, getFunction), (1, getElements), (2, getThis))
 
     // For TI-informed monomorphic callsites.
-    JSFunction* getSingleTarget() const {
+    WrappedFunction* getSingleTarget() const {
         return target_;
     }
 
@@ -12271,7 +12307,9 @@ class MNewCallObject : public MNewCallObjectBase
 
     explicit MNewCallObject(CallObject* templateObj)
       : MNewCallObjectBase(templateObj)
-    {}
+    {
+        MOZ_ASSERT(!templateObj->isSingleton());
+    }
 
     static MNewCallObject*
     New(TempAllocator& alloc, CallObject* templateObj)
@@ -12280,19 +12318,19 @@ class MNewCallObject : public MNewCallObjectBase
     }
 };
 
-class MNewRunOnceCallObject : public MNewCallObjectBase
+class MNewSingletonCallObject : public MNewCallObjectBase
 {
   public:
-    INSTRUCTION_HEADER(NewRunOnceCallObject)
+    INSTRUCTION_HEADER(NewSingletonCallObject)
 
-    explicit MNewRunOnceCallObject(CallObject* templateObj)
+    explicit MNewSingletonCallObject(CallObject* templateObj)
       : MNewCallObjectBase(templateObj)
     {}
 
-    static MNewRunOnceCallObject*
+    static MNewSingletonCallObject*
     New(TempAllocator& alloc, CallObject* templateObj)
     {
-        return new(alloc) MNewRunOnceCallObject(templateObj);
+        return new(alloc) MNewSingletonCallObject(templateObj);
     }
 };
 
@@ -12910,7 +12948,7 @@ class MAsmJSNeg
     }
 };
 
-class MAsmJSHeapAccess
+class MWasmMemoryAccess
 {
     uint32_t offset_;
     uint32_t align_;
@@ -12921,11 +12959,11 @@ class MAsmJSHeapAccess
     MemoryBarrierBits barrierAfter_;
 
   public:
-    explicit MAsmJSHeapAccess(Scalar::Type accessType, unsigned numSimdElems = 0,
-                              MemoryBarrierBits barrierBefore = MembarNobits,
-                              MemoryBarrierBits barrierAfter = MembarNobits)
+    explicit MWasmMemoryAccess(Scalar::Type accessType, uint32_t align, unsigned numSimdElems = 0,
+                               MemoryBarrierBits barrierBefore = MembarNobits,
+                               MemoryBarrierBits barrierAfter = MembarNobits)
       : offset_(0),
-        align_(Scalar::byteSize(accessType)),
+        align_(align),
         accessType_(accessType),
         needsBoundsCheck_(true),
         numSimdElems_(numSimdElems),
@@ -12933,6 +12971,7 @@ class MAsmJSHeapAccess
         barrierAfter_(barrierAfter)
     {
         MOZ_ASSERT(numSimdElems <= ScalarTypeToLength(accessType));
+        MOZ_ASSERT(mozilla::IsPowerOfTwo(align));
     }
 
     uint32_t offset() const { return offset_; }
@@ -12956,20 +12995,19 @@ class MAsmJSHeapAccess
 
 class MAsmJSLoadHeap
   : public MUnaryInstruction,
-    public MAsmJSHeapAccess,
+    public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
-    MAsmJSLoadHeap(MDefinition* base, const MAsmJSHeapAccess& access)
+    MAsmJSLoadHeap(MDefinition* base, const MWasmMemoryAccess& access)
       : MUnaryInstruction(base),
-        MAsmJSHeapAccess(access)
+        MWasmMemoryAccess(access)
     {
-        if (access.barrierBefore()|access.barrierAfter())
-            setGuard();         // Not removable
+        if (access.barrierBefore() | access.barrierAfter())
+            setGuard(); // Not removable
         else
             setMovable();
 
-        MOZ_ASSERT(access.accessType() != Scalar::Uint8Clamped,
-                   "unexpected load heap in asm.js");
+        MOZ_ASSERT(access.accessType() != Scalar::Uint8Clamped, "unexpected load heap in asm.js");
         setResultType(ScalarTypeToMIRType(access.accessType()));
     }
 
@@ -12993,16 +13031,15 @@ class MAsmJSLoadHeap
 
 class MAsmJSStoreHeap
   : public MBinaryInstruction,
-    public MAsmJSHeapAccess,
+    public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
-    MAsmJSStoreHeap(MDefinition* base, const MAsmJSHeapAccess& access,
-                    MDefinition* v)
+    MAsmJSStoreHeap(MDefinition* base, const MWasmMemoryAccess& access, MDefinition* v)
       : MBinaryInstruction(base, v),
-        MAsmJSHeapAccess(access)
+        MWasmMemoryAccess(access)
     {
-        if (access.barrierBefore()|access.barrierAfter())
-            setGuard();         // Not removable
+        if (access.barrierBefore() | access.barrierAfter())
+            setGuard(); // Not removable
     }
 
   public:
@@ -13020,13 +13057,13 @@ class MAsmJSStoreHeap
 
 class MAsmJSCompareExchangeHeap
   : public MTernaryInstruction,
-    public MAsmJSHeapAccess,
+    public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
-    MAsmJSCompareExchangeHeap(MDefinition* base, const MAsmJSHeapAccess& access,
+    MAsmJSCompareExchangeHeap(MDefinition* base, const MWasmMemoryAccess& access,
                               MDefinition* oldv, MDefinition* newv)
         : MTernaryInstruction(base, oldv, newv),
-          MAsmJSHeapAccess(access)
+          MWasmMemoryAccess(access)
     {
         setGuard();             // Not removable
         setResultType(MIRType::Int32);
@@ -13047,13 +13084,13 @@ class MAsmJSCompareExchangeHeap
 
 class MAsmJSAtomicExchangeHeap
   : public MBinaryInstruction,
-    public MAsmJSHeapAccess,
+    public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
-    MAsmJSAtomicExchangeHeap(MDefinition* base, const MAsmJSHeapAccess& access,
+    MAsmJSAtomicExchangeHeap(MDefinition* base, const MWasmMemoryAccess& access,
                              MDefinition* value)
         : MBinaryInstruction(base, value),
-          MAsmJSHeapAccess(access)
+          MWasmMemoryAccess(access)
     {
         setGuard();             // Not removable
         setResultType(MIRType::Int32);
@@ -13073,15 +13110,15 @@ class MAsmJSAtomicExchangeHeap
 
 class MAsmJSAtomicBinopHeap
   : public MBinaryInstruction,
-    public MAsmJSHeapAccess,
+    public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
     AtomicOp op_;
 
-    MAsmJSAtomicBinopHeap(AtomicOp op, MDefinition* base, const MAsmJSHeapAccess& access,
+    MAsmJSAtomicBinopHeap(AtomicOp op, MDefinition* base, const MWasmMemoryAccess& access,
                           MDefinition* v)
         : MBinaryInstruction(base, v),
-          MAsmJSHeapAccess(access),
+          MWasmMemoryAccess(access),
           op_(op)
     {
         setGuard();         // Not removable

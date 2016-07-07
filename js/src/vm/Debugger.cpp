@@ -337,11 +337,11 @@ class MOZ_RAII js::EnterDebuggeeNoExecute
     // warning or an error if there is a lock that locks it.
     static bool reportIfFoundInStack(JSContext* cx, HandleScript script) {
         if (EnterDebuggeeNoExecute* nx = findInStack(cx)) {
-            bool warning = !cx->runtime()->options().throwOnDebuggeeWouldRun();
+            bool warning = !cx->options().throwOnDebuggeeWouldRun();
             if (!warning || !nx->reported_) {
                 AutoCompartment ac(cx, nx->debugger().toJSObject());
                 nx->reported_ = true;
-                if (cx->runtime()->options().dumpStackOnDebuggeeWouldRun()) {
+                if (cx->options().dumpStackOnDebuggeeWouldRun()) {
                     fprintf(stdout, "Dumping stack for DebuggeeWouldRun:\n");
                     DumpBacktrace(cx);
                 }
@@ -4939,12 +4939,12 @@ Debugger::isCompilableUnit(JSContext* cx, unsigned argc, Value* vp)
                                                         options, chars.twoByteChars(),
                                                         length, /* foldConstants = */ true,
                                                         nullptr, nullptr);
-    JS::WarningReporter older = JS::SetWarningReporter(cx->runtime(), nullptr);
+    JS::WarningReporter older = JS::SetWarningReporter(cx, nullptr);
     if (!parser.checkOptions() || !parser.parse()) {
         // We ran into an error. If it was because we ran out of memory we report
         // it in the usual way.
         if (cx->isThrowingOutOfMemory()) {
-            JS::SetWarningReporter(cx->runtime(), older);
+            JS::SetWarningReporter(cx, older);
             return false;
         }
 
@@ -4955,7 +4955,7 @@ Debugger::isCompilableUnit(JSContext* cx, unsigned argc, Value* vp)
 
         cx->clearPendingException();
     }
-    JS::SetWarningReporter(cx->runtime(), older);
+    JS::SetWarningReporter(cx, older);
     args.rval().setBoolean(result);
     return true;
 }
@@ -8256,8 +8256,11 @@ DebuggerObject_getPromiseAllocationSite(JSContext* cx, unsigned argc, Value* vp)
     THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseAllocationSite", args, refobj);
 
     RootedObject allocSite(cx, promise->allocationSite());
-    if (!allocSite)
-        return null(args);
+    if (!allocSite) {
+        args.rval().setNull();
+        return true;
+    }
+
     if (!cx->compartment()->wrap(cx, &allocSite))
         return false;
     args.rval().set(ObjectValue(*allocSite));
@@ -8275,8 +8278,11 @@ DebuggerObject_getPromiseResolutionSite(JSContext* cx, unsigned argc, Value* vp)
     }
 
     RootedObject resolutionSite(cx, promise->resolutionSite());
-    if (!resolutionSite)
-        return null(args);
+    if (!resolutionSite) {
+        args.rval().setNull();
+        return true;
+    }
+
     if (!cx->compartment()->wrap(cx, &resolutionSite))
         return false;
     args.rval().set(ObjectValue(*resolutionSite));

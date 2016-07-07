@@ -149,10 +149,6 @@ class AstSig : public AstBase
         args_(Move(rhs.args_)),
         ret_(rhs.ret_)
     {}
-    void operator=(AstSig&& rhs) {
-        args_ = Move(rhs.args_);
-        ret_ = rhs.ret_;
-    }
     const AstValTypeVector& args() const {
         return args_;
     }
@@ -524,23 +520,21 @@ class AstImport : public AstNode
     AstRef& sig() { return sig_; }
 };
 
-enum class AstExportKind { Func, Memory };
-
 class AstExport : public AstNode
 {
     AstName name_;
-    AstExportKind kind_;
+    DefinitionKind kind_;
     AstRef func_;
 
   public:
     AstExport(AstName name, AstRef func)
-      : name_(name), kind_(AstExportKind::Func), func_(func)
+      : name_(name), kind_(DefinitionKind::Function), func_(func)
     {}
     explicit AstExport(AstName name)
-      : name_(name), kind_(AstExportKind::Memory)
+      : name_(name), kind_(DefinitionKind::Memory)
     {}
     AstName name() const { return name_; }
-    AstExportKind kind() const { return kind_; }
+    DefinitionKind kind() const { return kind_; }
     AstRef& func() { return func_; }
 };
 
@@ -577,8 +571,7 @@ class AstMemory : public AstNode
     AstSegmentVector segments_;
 
   public:
-    explicit AstMemory(uint32_t initialSize, Maybe<uint32_t> maxSize,
-                           AstSegmentVector&& segments)
+    explicit AstMemory(uint32_t initialSize, Maybe<uint32_t> maxSize, AstSegmentVector&& segments)
       : initialSize_(initialSize),
         maxSize_(maxSize),
         segments_(Move(segments))
